@@ -1,9 +1,11 @@
 #include "renderer/renderer.h"
 
-#include <stdio.h>
+#include "renderer/logger.h"
 
 static void update() { 
-  printf("Update\n");
+  LOG_DEBUG("MAIN", "Update called");
+  LOG_WARNING("MAIN", "Update called");
+  LOG_ERROR("MAIN", "Update called");
 }
 
 int main(int argc, char** argv) {

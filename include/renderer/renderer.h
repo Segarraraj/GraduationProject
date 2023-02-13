@@ -1,5 +1,5 @@
 #ifndef __PROJECT_RENDERER_RENDERER__
-#define __PROJECT_RENDERER_RENDERER__
+#define __PROJECT_RENDERER_RENDERER__ 1
 
 #include <memory>
 
