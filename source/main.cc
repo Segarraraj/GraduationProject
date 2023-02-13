@@ -1,7 +1,9 @@
 #include "renderer/renderer.h"
 
-static void update() {
+#include <stdio.h>
 
+static void update() { 
+  printf("Update\n");
 }
 
 int main(int argc, char** argv) {

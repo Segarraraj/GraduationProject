@@ -43,6 +43,8 @@ void RR::Renderer::Start() const {
       TranslateMessage(&message);
       DispatchMessage(&message);
     }
+
+    update_();
   }
 }
 
