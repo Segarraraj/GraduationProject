@@ -13,6 +13,14 @@ solution "GraduationProject"
 		"x64",
     }
 
+	links {
+		"d3d12", 
+		"dxgi",
+		"dxguid",
+		"windowscodecs",
+		"ole32"
+	}
+
     configuration "Debug"
         defines {
       	    "DEBUG",

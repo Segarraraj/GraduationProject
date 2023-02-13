@@ -1,28 +1,14 @@
-#include "renderer/window.h"
+#include "renderer/renderer.h"
 
-#include <Windows.h>
+static void update() {
 
-long long CALLBACK WindowProc(void* window, unsigned int message, unsigned long long wParam,
-                              long long lParam) {
-  LRESULT result = 0;
-  switch (message) {
-    default: {
-      result = DefWindowProc((HWND) window, message, wParam, lParam);
-      break;
-    }
-  }
-  return result;
 }
 
 int main(int argc, char** argv) {
-  RR::Window wnd;
+  RR::Renderer renderer;
 
-  wnd.Init(GetModuleHandle(NULL), "Main Class", "DX12 Graduation Project", WindowProc);
-  wnd.Show();
-  
-  while (1) {
-
-  }
+  renderer.Init(update);
+  renderer.Start();
 
   return 0;
 }

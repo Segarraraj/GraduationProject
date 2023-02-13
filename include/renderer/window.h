@@ -1,13 +1,6 @@
 #ifndef __PROJECT_RENDERER_WINDOW__
 #define __PROJECT_RENDERER_WINDOW__ 1
 
-//typedef void* HINSTANCE;
-//typedef void* HWND;
-//typedef LONG_PTR LRESULT;
-//typedef unsigned int UINT;
-//typedef unsigned int* WPARAM;
-//typedef int* LPARAM;
-
 namespace RR {
 class Window {
  public:
@@ -25,10 +18,12 @@ class Window {
             long long (*window_proc)(void*, unsigned int, unsigned long long, long long),
             void* user_data);
   void Show() const;
+
+  const void* window() const;
  private:
-  void* window_ = nullptr;
+  void* _window = nullptr;
 };
-}  // namespace RR
+}  // names   pace RR
 
 #endif  // !__PROJECT_RENDERER_WINDOW__
 

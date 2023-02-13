@@ -25,9 +25,9 @@ void RR::Window::Init(void* instance, const char* class_name,
 
   SetWindowLongPtr(window, GWLP_USERDATA, (LONG_PTR)user_data);
   
-  window_ = window;
+  _window = window;
 }
 
-void RR::Window::Show() const { 
-  ShowWindow((HWND)window_, 1);
-}
+void RR::Window::Show() const { ShowWindow((HWND)_window, 1); }
+
+const void* RR::Window::window() const { return _window; }
