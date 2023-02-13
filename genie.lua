@@ -48,12 +48,12 @@ solution "GraduationProject"
 		objdir "build/project/obj"
 
 		files {
-	    	"../src/**.cc",
-	    	"../include/**.h",
+	    	"source/**.cc",
+	    	"include/**.h",
 		}
 
 		includedirs {
-	    	"../include",
+	    	"include",
 		}
 
 	configuration "Debug"
