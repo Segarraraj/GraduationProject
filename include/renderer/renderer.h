@@ -4,11 +4,14 @@
 #include <memory>
 
 struct ID3D12CommandAllocator;
+struct ID3D12DescriptorHeap;
 struct ID3D12CommandQueue;
 struct IDXGISwapChain3;
+struct ID3D12Resource;
 struct IDXGIFactory4;
 struct IDXGIAdapter1;
 struct ID3D12Device;
+
 #ifdef DEBUG
 struct ID3D12Debug1;
 struct ID3D12DebugDevice;
@@ -41,9 +44,12 @@ class Renderer {
   ID3D12CommandAllocator* _command_allocator = nullptr;
   ID3D12CommandQueue* _command_queue = nullptr;
   IDXGISwapChain3* _swapchain = nullptr;
+  ID3D12DescriptorHeap* _rt_descriptor_heap = nullptr;
+  ID3D12Resource* _render_targets[kSwapchainBufferCount] = {0};
   IDXGIFactory4* _factory = nullptr;
   IDXGIAdapter1* _adapter = nullptr;
   ID3D12Device* _device = nullptr;
+
  #ifdef DEBUG
   ID3D12Debug1* _debug_controller = nullptr;
   ID3D12DebugDevice* _debug_device = nullptr;

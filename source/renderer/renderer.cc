@@ -136,6 +136,29 @@ int RR::Renderer::Init(void (*update)()) {
   }
   _swapchain = (IDXGISwapChain3*) chain;
 
+  D3D12_DESCRIPTOR_HEAP_DESC rt_descriptor_heap_desc = {};
+  rt_descriptor_heap_desc.NumDescriptors = kSwapchainBufferCount;
+  rt_descriptor_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+  rt_descriptor_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+  
+  result = _device->CreateDescriptorHeap(&rt_descriptor_heap_desc, IID_PPV_ARGS(&_rt_descriptor_heap));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldent create swapchain render targets descriptor heap");
+    return 1;
+  }
+
+  unsigned int descriptor_size =
+      _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+  D3D12_CPU_DESCRIPTOR_HANDLE 
+    rt_handle(_rt_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
+
+  for (unsigned int i = 0; i < kSwapchainBufferCount; i++) {
+    _swapchain->GetBuffer(i, IID_PPV_ARGS(&_render_targets[i]));
+    _device->CreateRenderTargetView(_render_targets[i], nullptr, rt_handle);
+    rt_handle.ptr += (1 * descriptor_size);
+  }
+
   LOG_DEBUG("RR", "Renderer initialized");
   return 0;
 }
@@ -154,4 +177,4 @@ void RR::Renderer::Start() const {
 
 void RR::Renderer::Stop() { _running = false; }
 
-void RR::Renderer::Resize(){};
+void RR::Renderer::Resize() { }
