@@ -72,7 +72,7 @@ int RR::Renderer::Init(void (*update)()) {
       continue;
     }
 
-    HRESULT result = D3D12CreateDevice(_adapter, D3D_FEATURE_LEVEL_12_0, 
+    result = D3D12CreateDevice(_adapter, D3D_FEATURE_LEVEL_12_0, 
                                        IID_PPV_ARGS(&_device));
     if (SUCCEEDED(result)) {
       printf("\n\0");
@@ -87,9 +87,21 @@ int RR::Renderer::Init(void (*update)()) {
   }
 
 #ifdef DEBUG
-
+  _device->QueryInterface(&_debug_device);
 #endif  // DEBUG
 
+  D3D12_COMMAND_QUEUE_DESC queue_desc = {};
+  queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+  queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+
+  result = _device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&_command_queue));
+  if (!SUCCEEDED(result)) {
+    LOG_ERROR("RR", "Couldn't create command queue");
+    return 1;
+  }
+
+  result = _device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                           IID_PPV_ARGS(&_command_allocator));
 
   LOG_DEBUG("RR", "Renderer initialized");
   return 0;

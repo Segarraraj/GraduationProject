@@ -3,13 +3,15 @@
 
 #include <memory>
 
+struct ID3D12CommandQueue;
+struct IDXGIFactory4;
+struct IDXGIAdapter1;
+struct ID3D12Device;
+struct ID3D12CommandAllocator;
 #ifdef DEBUG
 struct ID3D12Debug1;
 struct ID3D12DebugDevice;
 #endif
-struct IDXGIFactory4;
-struct IDXGIAdapter1;
-struct ID3D12Device;
 
 namespace RR {
 class Window;
@@ -32,6 +34,8 @@ class Renderer {
  private:
   std::unique_ptr<RR::Window> _window;
 
+  ID3D12CommandAllocator* _command_allocator;
+  ID3D12CommandQueue* _command_queue;
   IDXGIFactory4* _factory;
   IDXGIAdapter1* _adapter;
   ID3D12Device* _device;
