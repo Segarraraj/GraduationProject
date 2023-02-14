@@ -1,17 +1,17 @@
 #include "renderer/renderer.h"
 
-#include "renderer/logger.h"
-
 static void update() { 
-  LOG_DEBUG("MAIN", "Update called");
-  LOG_WARNING("MAIN", "Update called");
-  LOG_ERROR("MAIN", "Update called");
+
 }
 
 int main(int argc, char** argv) {
   RR::Renderer renderer;
 
-  renderer.Init(update);
+  int result = renderer.Init(update);
+  if (result != 0) {
+    return 1;
+  }
+
   renderer.Start();
 
   return 0;
