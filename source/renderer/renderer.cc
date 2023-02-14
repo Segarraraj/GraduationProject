@@ -159,6 +159,56 @@ int RR::Renderer::Init(void (*update)()) {
     rt_handle.ptr += (1 * descriptor_size);
   }
 
+  D3D12_FEATURE_DATA_ROOT_SIGNATURE root_signature_feature_data = {};
+  root_signature_feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+
+  if (FAILED(_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE,
+                                          &root_signature_feature_data,
+                                          sizeof(root_signature_feature_data)))) {
+    root_signature_feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+  }
+
+  D3D12_DESCRIPTOR_RANGE1 ranges[1];
+  ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+  ranges[0].NumDescriptors = 1;
+  ranges[0].BaseShaderRegister = 0;
+  ranges[0].RegisterSpace = 0;
+  ranges[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
+  ranges[0].OffsetInDescriptorsFromTableStart = 0;
+
+  D3D12_ROOT_PARAMETER1 root_signature_parameters[1];
+  root_signature_parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+  root_signature_parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+  root_signature_parameters[0].DescriptorTable.NumDescriptorRanges =
+      sizeof(ranges) / sizeof(D3D12_DESCRIPTOR_RANGE1);
+  root_signature_parameters[0].DescriptorTable.pDescriptorRanges = ranges;
+
+  D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
+  root_signature_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+  root_signature_desc.Desc_1_1.Flags =
+      D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+  root_signature_desc.Desc_1_1.NumParameters =
+      sizeof(root_signature_parameters) / sizeof(D3D12_ROOT_PARAMETER1);;
+  root_signature_desc.Desc_1_1.pParameters = root_signature_parameters;      
+  root_signature_desc.Desc_1_1.NumStaticSamplers = 0;
+  root_signature_desc.Desc_1_1.pStaticSamplers = nullptr;
+
+  ID3DBlob* signature = nullptr;
+  ID3DBlob* error = nullptr;
+
+  result = D3D12SerializeVersionedRootSignature(&root_signature_desc, &signature, &error);
+  result = _device->CreateRootSignature(0, signature->GetBufferPointer(),
+                               signature->GetBufferSize(),
+                               IID_PPV_ARGS(&_root_signature));
+
+  if (signature != nullptr) {
+    signature->Release();
+  }
+
+  if (error != nullptr) {
+    error->Release();
+  }
+
   LOG_DEBUG("RR", "Renderer initialized");
   return 0;
 }

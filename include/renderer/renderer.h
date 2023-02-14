@@ -5,6 +5,7 @@
 
 struct ID3D12CommandAllocator;
 struct ID3D12DescriptorHeap;
+struct ID3D12RootSignature;
 struct ID3D12CommandQueue;
 struct IDXGISwapChain3;
 struct ID3D12Resource;
@@ -46,6 +47,7 @@ class Renderer {
   IDXGISwapChain3* _swapchain = nullptr;
   ID3D12DescriptorHeap* _rt_descriptor_heap = nullptr;
   ID3D12Resource* _render_targets[kSwapchainBufferCount] = {0};
+  ID3D12RootSignature* _root_signature = nullptr;
   IDXGIFactory4* _factory = nullptr;
   IDXGIAdapter1* _adapter = nullptr;
   ID3D12Device* _device = nullptr;
