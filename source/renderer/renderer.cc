@@ -216,12 +216,12 @@ int RR::Renderer::Init(void (*update)()) {
        0.0f,  1.0f, 0.0f, 0.0f, 0.0f, 1.0f
   };
 
-  D3D12_HEAP_PROPERTIES vertex_buffer_properties = {};
-  vertex_buffer_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
-  vertex_buffer_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-  vertex_buffer_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-  vertex_buffer_properties.CreationNodeMask = 1;
-  vertex_buffer_properties.VisibleNodeMask = 1;
+  D3D12_HEAP_PROPERTIES vertex_buffer_heap_properties = {};
+  vertex_buffer_heap_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
+  vertex_buffer_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  vertex_buffer_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+  vertex_buffer_heap_properties.CreationNodeMask = 1;
+  vertex_buffer_heap_properties.VisibleNodeMask = 1;
 
   D3D12_RESOURCE_DESC vertex_buffer_resource_desc;
   vertex_buffer_resource_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -237,7 +237,7 @@ int RR::Renderer::Init(void (*update)()) {
   vertex_buffer_resource_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
   result = _device->CreateCommittedResource(
-      &vertex_buffer_properties, D3D12_HEAP_FLAG_NONE, &vertex_buffer_resource_desc,
+      &vertex_buffer_heap_properties, D3D12_HEAP_FLAG_NONE, &vertex_buffer_resource_desc,
       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&_vertex_buffer));
   if (FAILED(result)) {
     LOG_ERROR("RR", "Couldn't create vertex buffer");
@@ -261,6 +261,35 @@ int RR::Renderer::Init(void (*update)()) {
   _vertex_buffer_view->BufferLocation = _vertex_buffer->GetGPUVirtualAddress();
   _vertex_buffer_view->StrideInBytes = sizeof(float) * 6;
   _vertex_buffer_view->SizeInBytes = sizeof(vertex_buffer_data);
+
+  uint32_t index_buffer_data[3] = {0, 1, 2};
+
+  vertex_buffer_resource_desc.Width = sizeof(index_buffer_data);
+
+  result = _device->CreateCommittedResource(
+      &vertex_buffer_heap_properties, D3D12_HEAP_FLAG_NONE,
+      &vertex_buffer_resource_desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+      IID_PPV_ARGS(&_index_buffer));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't create index buffer");
+    return 1;
+  }
+
+  result = _index_buffer->Map(
+      0, &read_range, reinterpret_cast<void**>(&vertex_data_buffer_begin));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't map index buffer memory");
+    return 1;
+  }
+
+  memcpy(vertex_data_buffer_begin, index_buffer_data, sizeof(index_buffer_data));
+  _index_buffer->Unmap(0, nullptr);
+
+  _index_buffer_view = std::make_unique<D3D12_INDEX_BUFFER_VIEW>();
+
+  _index_buffer_view->BufferLocation = _index_buffer->GetGPUVirtualAddress();
+  _index_buffer_view->Format = DXGI_FORMAT_R32_UINT;
+  _index_buffer_view->SizeInBytes = sizeof(vertex_buffer_data);
 
   LOG_DEBUG("RR", "Renderer initialized");
   return 0;

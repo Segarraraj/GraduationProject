@@ -4,6 +4,7 @@
 #include <memory>
 
 struct D3D12_VERTEX_BUFFER_VIEW;
+struct D3D12_INDEX_BUFFER_VIEW;
 struct ID3D12CommandAllocator;
 struct ID3D12DescriptorHeap;
 struct ID3D12RootSignature;
@@ -51,6 +52,8 @@ class Renderer {
   ID3D12RootSignature* _root_signature = nullptr;
   ID3D12Resource* _vertex_buffer = nullptr;
   std::unique_ptr<D3D12_VERTEX_BUFFER_VIEW> _vertex_buffer_view;
+  ID3D12Resource* _index_buffer = nullptr;
+  std::unique_ptr<D3D12_INDEX_BUFFER_VIEW> _index_buffer_view;
   IDXGIFactory4* _factory = nullptr;
   IDXGIAdapter1* _adapter = nullptr;
   ID3D12Device* _device = nullptr;
