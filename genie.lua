@@ -59,6 +59,7 @@ solution "GraduationProject"
 			"genie.lua",
 	    	"source/**.cc",
 	    	"include/**.h",
+			"include/**.hpp",
 			"shaders/**.hlsl"
 		}
 
