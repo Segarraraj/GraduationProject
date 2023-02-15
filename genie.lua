@@ -56,8 +56,10 @@ solution "GraduationProject"
 		objdir "build/project/obj"
 
 		files {
+			"genie.lua",
 	    	"source/**.cc",
 	    	"include/**.h",
+			"shaders/**.hlsl"
 		}
 
 		includedirs {
