@@ -1,6 +1,8 @@
 #ifndef __PROJECT_RENDERER_RENDERER__
 #define __PROJECT_RENDERER_RENDERER__ 1
 
+#include <DirectXMath.h>
+
 #include <memory>
 
 struct D3D12_VERTEX_BUFFER_VIEW;
@@ -22,6 +24,13 @@ struct ID3D12DebugDevice;
 
 namespace RR {
 class Window;
+
+struct UniformStruct {
+  DirectX::XMFLOAT4X4 view;
+  DirectX::XMFLOAT4X4 model;
+  DirectX::XMFLOAT4X4 projection;
+};
+
 class Renderer {
  public:
   Renderer();
@@ -54,6 +63,8 @@ class Renderer {
   std::unique_ptr<D3D12_VERTEX_BUFFER_VIEW> _vertex_buffer_view;
   ID3D12Resource* _index_buffer = nullptr;
   std::unique_ptr<D3D12_INDEX_BUFFER_VIEW> _index_buffer_view;
+  ID3D12Resource* _uniform_buffer;
+  ID3D12DescriptorHeap* _uniform_buffer_heap;
   IDXGIFactory4* _factory = nullptr;
   IDXGIAdapter1* _adapter = nullptr;
   ID3D12Device* _device = nullptr;

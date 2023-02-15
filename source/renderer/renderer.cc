@@ -275,8 +275,7 @@ int RR::Renderer::Init(void (*update)()) {
     return 1;
   }
 
-  result = _index_buffer->Map(
-      0, &read_range, reinterpret_cast<void**>(&vertex_data_buffer_begin));
+  result = _index_buffer->Map(0, &read_range, reinterpret_cast<void**>(&vertex_data_buffer_begin));
   if (FAILED(result)) {
     LOG_ERROR("RR", "Couldn't map index buffer memory");
     return 1;
@@ -290,6 +289,78 @@ int RR::Renderer::Init(void (*update)()) {
   _index_buffer_view->BufferLocation = _index_buffer->GetGPUVirtualAddress();
   _index_buffer_view->Format = DXGI_FORMAT_R32_UINT;
   _index_buffer_view->SizeInBytes = sizeof(vertex_buffer_data);
+
+  D3D12_HEAP_PROPERTIES uniform_heap_props = {};
+  uniform_heap_props.Type = D3D12_HEAP_TYPE_UPLOAD;
+  uniform_heap_props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  uniform_heap_props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+  uniform_heap_props.CreationNodeMask = 1;
+  uniform_heap_props.VisibleNodeMask = 1;
+
+  D3D12_DESCRIPTOR_HEAP_DESC uniform_heap_desc = {};
+  uniform_heap_desc.NumDescriptors = 1;
+  uniform_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+  uniform_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+
+  result = _device->CreateDescriptorHeap(&uniform_heap_desc, IID_PPV_ARGS(&_uniform_buffer_heap));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't create uniform heap descriptor");
+    return 1;
+  }
+
+  D3D12_RESOURCE_DESC uniform_buffer_desc = {};
+  uniform_buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+  uniform_buffer_desc.Alignment = 0;
+  uniform_buffer_desc.Width = (sizeof(UniformStruct) + 255) & ~255;
+  uniform_buffer_desc.Height = 1;
+  uniform_buffer_desc.DepthOrArraySize = 1;
+  uniform_buffer_desc.MipLevels = 1;
+  uniform_buffer_desc.Format = DXGI_FORMAT_UNKNOWN;
+  uniform_buffer_desc.SampleDesc.Count = 1;
+  uniform_buffer_desc.SampleDesc.Quality = 0;
+  uniform_buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  uniform_buffer_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+  result = _device->CreateCommittedResource(
+      &uniform_heap_props, D3D12_HEAP_FLAG_NONE, &uniform_buffer_desc,
+      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+      IID_PPV_ARGS(&_uniform_buffer));
+
+  D3D12_CONSTANT_BUFFER_VIEW_DESC uniform_buffer_view_desc = {};
+  uniform_buffer_view_desc.BufferLocation = _uniform_buffer->GetGPUVirtualAddress();
+  uniform_buffer_view_desc.SizeInBytes = (sizeof(UniformStruct) + 255) & ~255;
+
+  D3D12_CPU_DESCRIPTOR_HANDLE uniform_buffer_handle(
+      _uniform_buffer_heap->GetCPUDescriptorHandleForHeapStart());
+
+  uniform_buffer_handle.ptr =
+      uniform_buffer_handle.ptr +
+      _device->GetDescriptorHandleIncrementSize(
+          D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) * 0;
+
+  _device->CreateConstantBufferView(&uniform_buffer_view_desc,
+                                    uniform_buffer_handle);
+
+  read_range = {};
+  UniformStruct uniform = {};
+
+  DirectX::XMMATRIX matrix = DirectX::XMMatrixIdentity();
+  XMStoreFloat4x4(&uniform.model, matrix);
+
+  matrix =
+      DirectX::XMMatrixLookAtLH(DirectX::XMVectorSet(0.0f, 0.0f, -2.0f, 1.0f),
+                                DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f),
+                                DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f));
+  XMStoreFloat4x4(&uniform.view, matrix);
+  
+  matrix = DirectX::XMMatrixPerspectiveLH(
+      window_screen_bounds.right - window_screen_bounds.left,
+      window_screen_bounds.bottom - window_screen_bounds.top, .1f, 10.0f);
+  XMStoreFloat4x4(&uniform.projection, matrix);
+
+  _uniform_buffer->Map(0, &read_range, reinterpret_cast<void**>(&vertex_data_buffer_begin));
+  memcpy(vertex_data_buffer_begin, &uniform, sizeof(UniformStruct));
+  _uniform_buffer->Unmap(0, nullptr);
 
   LOG_DEBUG("RR", "Renderer initialized");
   return 0;
