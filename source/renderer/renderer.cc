@@ -6,6 +6,7 @@
 #include <dxgi1_6.h>
 #include <d3d12sdklayers.h>
 
+#include "utils.hpp"
 #include "renderer/window.h"
 #include "renderer/logger.h"
 
@@ -361,6 +362,24 @@ int RR::Renderer::Init(void (*update)()) {
   _uniform_buffer->Map(0, &read_range, reinterpret_cast<void**>(&vertex_data_buffer_begin));
   memcpy(vertex_data_buffer_begin, &uniform, sizeof(UniformStruct));
   _uniform_buffer->Unmap(0, nullptr);
+
+  std::vector<char> bytecode = Utils::ReadFile("../../shaders/triangle_vert.dxil\0");
+  if (bytecode.size() == 0) {
+    return 1;
+  }
+
+  D3D12_SHADER_BYTECODE vertex_shader_byte_code;
+  vertex_shader_byte_code.pShaderBytecode = bytecode.data();
+  vertex_shader_byte_code.BytecodeLength = bytecode.size();
+
+  bytecode = Utils::ReadFile("../../shaders/triangle_frag.dxil\0");
+  if (bytecode.size() == 0) {
+    return 1;
+  }
+
+  D3D12_SHADER_BYTECODE fragment_shader_byte_code;
+  fragment_shader_byte_code.pShaderBytecode = bytecode.data();
+  fragment_shader_byte_code.BytecodeLength = bytecode.size();
 
   LOG_DEBUG("RR", "Renderer initialized");
   return 0;
