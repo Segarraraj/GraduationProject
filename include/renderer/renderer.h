@@ -5,18 +5,18 @@
 
 #include <memory>
 
+struct ID3D12Device;
+struct IDXGISwapChain3;
+struct ID3D12CommandQueue;
+struct ID3D12DescriptorHeap;
+struct ID3D12Resource;
+struct ID3D12Fence;
+struct ID3D12CommandAllocator;
+struct ID3D12GraphicsCommandList;
 struct D3D12_VERTEX_BUFFER_VIEW;
 struct D3D12_INDEX_BUFFER_VIEW;
-struct ID3D12CommandAllocator;
-struct ID3D12DescriptorHeap;
 struct ID3D12PipelineState;
 struct ID3D12RootSignature;
-struct ID3D12CommandQueue;
-struct IDXGISwapChain3;
-struct ID3D12Resource;
-struct IDXGIFactory4;
-struct IDXGIAdapter1;
-struct ID3D12Device;
 
 #ifdef DEBUG
 struct ID3D12Debug1;
@@ -45,20 +45,26 @@ class Renderer {
   ~Renderer();
 
   int Init(void (*update)());
-  void Start() const;
+  void Start();
   void Stop();
   void Resize();
 
  private:
-  static const unsigned int kSwapchainBufferCount = 2;
+  static const unsigned int kSwapchainBufferCount = 3;
 
   std::unique_ptr<RR::Window> _window;
 
-  ID3D12CommandAllocator* _command_allocator = nullptr;
+  ID3D12Device* _device = nullptr;
+  IDXGISwapChain3* _swap_chain = nullptr;
   ID3D12CommandQueue* _command_queue = nullptr;
-  IDXGISwapChain3* _swapchain = nullptr;
   ID3D12DescriptorHeap* _rt_descriptor_heap = nullptr;
   ID3D12Resource* _render_targets[kSwapchainBufferCount] = {0};
+  ID3D12CommandAllocator* _command_allocators[kSwapchainBufferCount] = {0};
+  ID3D12GraphicsCommandList* _command_list = nullptr;
+  ID3D12Fence* _fences[kSwapchainBufferCount] = {0};  
+  void* _fence_event = nullptr;
+  unsigned int _fence_values[kSwapchainBufferCount] = {0};
+
   ID3D12RootSignature* _root_signature = nullptr;
   ID3D12Resource* _vertex_buffer = nullptr;
   std::unique_ptr<D3D12_VERTEX_BUFFER_VIEW> _vertex_buffer_view;
@@ -67,9 +73,6 @@ class Renderer {
   ID3D12Resource* _uniform_buffer;
   ID3D12DescriptorHeap* _uniform_buffer_heap;
   ID3D12PipelineState* _pipeline_state;
-  IDXGIFactory4* _factory = nullptr;
-  IDXGIAdapter1* _adapter = nullptr;
-  ID3D12Device* _device = nullptr;
 
  #ifdef DEBUG
   ID3D12Debug1* _debug_controller = nullptr;
@@ -79,6 +82,12 @@ class Renderer {
   void (*update_)() = nullptr;
 
   bool _running = true;
+  int _current_frame = 0;
+
+  void UpdatePipeline();
+  void Render();
+  void Cleanup();
+  void WaitForFrame();
 };
 }
 
