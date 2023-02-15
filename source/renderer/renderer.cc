@@ -381,6 +381,71 @@ int RR::Renderer::Init(void (*update)()) {
   fragment_shader_byte_code.pShaderBytecode = bytecode.data();
   fragment_shader_byte_code.BytecodeLength = bytecode.size();
 
+  D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
+
+  D3D12_INPUT_ELEMENT_DESC pipeline_input_descs[] = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      {"COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}};
+
+  pipeline_desc.InputLayout = {pipeline_input_descs,
+      sizeof(pipeline_input_descs) / sizeof(D3D12_INPUT_ELEMENT_DESC)};
+  pipeline_desc.pRootSignature = _root_signature;
+
+  D3D12_RASTERIZER_DESC rasterizer_desc = {};
+  rasterizer_desc.FillMode = D3D12_FILL_MODE_SOLID;
+  rasterizer_desc.CullMode = D3D12_CULL_MODE_NONE;
+  rasterizer_desc.FrontCounterClockwise = FALSE;
+  rasterizer_desc.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+  rasterizer_desc.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+  rasterizer_desc.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+  rasterizer_desc.DepthClipEnable = TRUE;
+  rasterizer_desc.MultisampleEnable = FALSE;
+  rasterizer_desc.AntialiasedLineEnable = FALSE;
+  rasterizer_desc.ForcedSampleCount = 0;
+  rasterizer_desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+  pipeline_desc.RasterizerState = rasterizer_desc;
+  pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+  D3D12_BLEND_DESC blend_desc;
+  blend_desc.AlphaToCoverageEnable = FALSE;
+  blend_desc.IndependentBlendEnable = FALSE;
+
+  const D3D12_RENDER_TARGET_BLEND_DESC render_target_blend_desc = {
+      FALSE,
+      FALSE,
+      D3D12_BLEND_ONE,
+      D3D12_BLEND_ZERO,
+      D3D12_BLEND_OP_ADD,
+      D3D12_BLEND_ONE,
+      D3D12_BLEND_ZERO,
+      D3D12_BLEND_OP_ADD,
+      D3D12_LOGIC_OP_NOOP,
+      D3D12_COLOR_WRITE_ENABLE_ALL,
+  };
+
+  for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) {
+    blend_desc.RenderTarget[i] = render_target_blend_desc;
+  }
+
+  pipeline_desc.BlendState = blend_desc;
+
+  pipeline_desc.DepthStencilState.DepthEnable = FALSE;
+  pipeline_desc.DepthStencilState.StencilEnable = FALSE;
+  pipeline_desc.SampleMask = UINT_MAX;
+
+  pipeline_desc.NumRenderTargets = 1;
+  pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+  pipeline_desc.SampleDesc.Count = 1;
+
+  result = _device->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(&_pipeline_state));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't create pipeline state");
+    return 1;
+  }
+
   LOG_DEBUG("RR", "Renderer initialized");
   return 0;
 }

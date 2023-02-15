@@ -9,6 +9,7 @@ struct D3D12_VERTEX_BUFFER_VIEW;
 struct D3D12_INDEX_BUFFER_VIEW;
 struct ID3D12CommandAllocator;
 struct ID3D12DescriptorHeap;
+struct ID3D12PipelineState;
 struct ID3D12RootSignature;
 struct ID3D12CommandQueue;
 struct IDXGISwapChain3;
@@ -65,6 +66,7 @@ class Renderer {
   std::unique_ptr<D3D12_INDEX_BUFFER_VIEW> _index_buffer_view;
   ID3D12Resource* _uniform_buffer;
   ID3D12DescriptorHeap* _uniform_buffer_heap;
+  ID3D12PipelineState* _pipeline_state;
   IDXGIFactory4* _factory = nullptr;
   IDXGIAdapter1* _adapter = nullptr;
   ID3D12Device* _device = nullptr;
