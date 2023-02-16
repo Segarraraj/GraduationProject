@@ -360,6 +360,92 @@ int RR::Renderer::Init(void (*update)()) {
     return 1;
   }
 
+  // Create vertex buffer
+  DirectX::XMFLOAT3 vertex_list[] = {
+      {0.0f, 0.5f, 0.5f}, {0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, 0.5f}
+  };
+
+  D3D12_HEAP_PROPERTIES vertex_default_heap_properties = {};
+  vertex_default_heap_properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+  vertex_default_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  vertex_default_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+  D3D12_RESOURCE_DESC vertex_resource_desc = {};
+  vertex_resource_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+  vertex_resource_desc.Alignment = 0;
+  vertex_resource_desc.Width = sizeof(vertex_list);
+  vertex_resource_desc.Height = 1;
+  vertex_resource_desc.DepthOrArraySize = 1;
+  vertex_resource_desc.MipLevels = 1;
+  vertex_resource_desc.Format = DXGI_FORMAT_UNKNOWN;
+  vertex_resource_desc.SampleDesc.Count = 1;
+  vertex_resource_desc.SampleDesc.Quality = 0;
+  vertex_resource_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  vertex_resource_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+   
+  result = _device->CreateCommittedResource(
+      &vertex_default_heap_properties, D3D12_HEAP_FLAG_NONE, 
+      &vertex_resource_desc, D3D12_RESOURCE_STATE_COMMON, 
+      nullptr, IID_PPV_ARGS(&_vertex_default_buffer));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't create vertex buffer default resource heap");
+    return 1;
+  }
+
+  ID3D12Resource* vertex_buffer_upload_heap = nullptr;
+  D3D12_HEAP_PROPERTIES vertex_upload_heap_properties = {};
+  vertex_upload_heap_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
+  vertex_upload_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  vertex_upload_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+  result = _device->CreateCommittedResource(
+      &vertex_upload_heap_properties, D3D12_HEAP_FLAG_NONE,
+      &vertex_resource_desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+      IID_PPV_ARGS(&vertex_buffer_upload_heap));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't create vertex buffer upload resource heap");
+    return 1;
+  }
+
+  UINT8* upload_resource_heap_begin;
+  D3D12_RANGE read_range;
+  read_range.Begin = 0;
+  read_range.End = 0;
+
+  // Copy data to upload resource heap
+  vertex_buffer_upload_heap->Map(0, &read_range,
+      reinterpret_cast<void**>(&upload_resource_heap_begin));
+  memcpy(upload_resource_heap_begin, vertex_list, sizeof(vertex_list));
+  vertex_buffer_upload_heap->Unmap(0, nullptr);
+
+  D3D12_RESOURCE_BARRIER vb_upload_resource_heap_barrier = {};
+  vb_upload_resource_heap_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+  vb_upload_resource_heap_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+  vb_upload_resource_heap_barrier.Transition.pResource = _vertex_default_buffer;
+  vb_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+  vb_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+  vb_upload_resource_heap_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+  
+  _command_list->Reset(_command_allocators[_current_frame], NULL);
+  _command_list->ResourceBarrier(1, &vb_upload_resource_heap_barrier);
+  _command_list->CopyResource(_vertex_default_buffer, vertex_buffer_upload_heap);
+  vb_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+  vb_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+  _command_list->ResourceBarrier(1, &vb_upload_resource_heap_barrier);
+  _command_list->Close();
+
+  ID3D12CommandList* command_lists[] = {_command_list};
+  _command_queue->ExecuteCommandLists(sizeof(command_lists) / sizeof(ID3D12CommandList), command_lists);
+
+  _fence_values[_current_frame]++;   
+  _command_queue->Signal(_fences[_current_frame], _fence_values[_current_frame]);
+
+  _vertex_buffer_view = std::make_unique<D3D12_VERTEX_BUFFER_VIEW>();
+  _vertex_buffer_view->BufferLocation = _vertex_default_buffer->GetGPUVirtualAddress();
+  _vertex_buffer_view->StrideInBytes = sizeof(DirectX::XMFLOAT3);
+  _vertex_buffer_view->SizeInBytes = sizeof(vertex_list);
+
+
   LOG_DEBUG("RR", "Renderer initialized");
   return 0;
 }
@@ -402,7 +488,6 @@ void RR::Renderer::UpdatePipeline() {
     return;
   }
 
-  // Command list resource barrier
   D3D12_RESOURCE_BARRIER rt_render_barrier = {};
   rt_render_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
   rt_render_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -412,7 +497,6 @@ void RR::Renderer::UpdatePipeline() {
   rt_render_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
   _command_list->ResourceBarrier(1, &rt_render_barrier);
 
-  // Command list render target
   unsigned int descriptor_size =
       _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
   D3D12_CPU_DESCRIPTOR_HANDLE rt_descriptor_handle(
@@ -421,10 +505,33 @@ void RR::Renderer::UpdatePipeline() {
 
   _command_list->OMSetRenderTargets(1, &rt_descriptor_handle, FALSE, nullptr);
 
-  // Clear render target
   const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
   _command_list->ClearRenderTargetView(rt_descriptor_handle, clearColor, 0,
                                        nullptr);
+
+  RECT window_screen_bounds;
+  GetClientRect((HWND)_window->window(), &window_screen_bounds);
+
+  D3D12_VIEWPORT viewport = {};
+  viewport.TopLeftX = 0;
+  viewport.TopLeftY = 0;
+  viewport.Width = window_screen_bounds.right - window_screen_bounds.left;
+  viewport.Height = window_screen_bounds.bottom - window_screen_bounds.top;
+  viewport.MinDepth = 0.0f;
+  viewport.MaxDepth = 1.0f;
+
+  D3D12_RECT scissor_rect = {};
+  scissor_rect.left = 0;
+  scissor_rect.top = 0;
+  scissor_rect.right = window_screen_bounds.right - window_screen_bounds.left;
+  scissor_rect.bottom = window_screen_bounds.bottom - window_screen_bounds.top;
+
+  _command_list->SetPipelineState(_pipeline_state);
+  _command_list->SetGraphicsRootSignature(_root_signature);
+  _command_list->RSSetViewports(1, &viewport);
+  _command_list->RSSetScissorRects(1, &scissor_rect);
+  _command_list->IASetVertexBuffers(0, 1, _vertex_buffer_view.get());
+  _command_list->DrawInstanced(3, 1, 0, 0);
 
   D3D12_RESOURCE_BARRIER rt_present_barrier = {};
   rt_present_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
