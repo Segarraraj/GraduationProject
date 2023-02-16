@@ -18,7 +18,8 @@ solution "GraduationProject"
 		"dxgi",
 		"dxguid",
 		"windowscodecs",
-		"ole32"
+		"ole32",
+		"D3DCompiler"
 	}
 
     configuration "Debug"
