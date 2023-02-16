@@ -13,8 +13,6 @@ struct ID3D12Resource;
 struct ID3D12Fence;
 struct ID3D12CommandAllocator;
 struct ID3D12GraphicsCommandList;
-struct D3D12_VERTEX_BUFFER_VIEW;
-struct D3D12_INDEX_BUFFER_VIEW;
 struct ID3D12PipelineState;
 struct ID3D12RootSignature;
 
@@ -65,14 +63,8 @@ class Renderer {
   void* _fence_event = nullptr;
   unsigned int _fence_values[kSwapchainBufferCount] = {0};
 
+  ID3D12PipelineState* _pipeline_state = nullptr;
   ID3D12RootSignature* _root_signature = nullptr;
-  ID3D12Resource* _vertex_buffer = nullptr;
-  std::unique_ptr<D3D12_VERTEX_BUFFER_VIEW> _vertex_buffer_view;
-  ID3D12Resource* _index_buffer = nullptr;
-  std::unique_ptr<D3D12_INDEX_BUFFER_VIEW> _index_buffer_view;
-  ID3D12Resource* _uniform_buffer;
-  ID3D12DescriptorHeap* _uniform_buffer_heap;
-  ID3D12PipelineState* _pipeline_state;
 
  #ifdef DEBUG
   ID3D12Debug1* _debug_controller = nullptr;
