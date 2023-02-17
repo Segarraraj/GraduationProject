@@ -179,6 +179,7 @@ int RR::Renderer::Init(void (*update)()) {
   for (unsigned int i = 0; i < kSwapchainBufferCount; i++) {
     _swap_chain->GetBuffer(i, IID_PPV_ARGS(&_render_targets[i]));
     _device->CreateRenderTargetView(_render_targets[i], nullptr, rt_descriptor_handle);
+    _render_targets[i]->SetName(L"Render Target");
     rt_descriptor_handle.ptr += (1 * descriptor_size);
   }
 
@@ -337,6 +338,10 @@ int RR::Renderer::Init(void (*update)()) {
   for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) {
     blend_desc.RenderTarget[i] = render_target_blend_desc;
   }
+  D3D12_DEPTH_STENCILOP_DESC depth_stencil_op = { 
+    D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 
+    D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS
+  };  
 
   D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
   pipeline_desc.InputLayout = input_layout_desc;
@@ -349,8 +354,13 @@ int RR::Renderer::Init(void (*update)()) {
   pipeline_desc.NumRenderTargets = 1;
   pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
   pipeline_desc.SampleDesc.Count = 1;
-  pipeline_desc.DepthStencilState.DepthEnable = FALSE;
+  pipeline_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+  pipeline_desc.DepthStencilState.DepthEnable = TRUE;
   pipeline_desc.DepthStencilState.StencilEnable = FALSE;
+  pipeline_desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+  pipeline_desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+  pipeline_desc.DepthStencilState.FrontFace = depth_stencil_op;
+  pipeline_desc.DepthStencilState.BackFace = depth_stencil_op;
   pipeline_desc.SampleMask = UINT_MAX;
 
   result = _device->CreateGraphicsPipelineState(&pipeline_desc, 
@@ -431,6 +441,14 @@ int RR::Renderer::Init(void (*update)()) {
     return 1;
   }
 
+#ifdef DEBUG
+  index_buffer_upload_heap->SetName(L"index upload heap");
+  _index_default_buffer->SetName(L"index_default_heap");
+  vertex_buffer_upload_heap->SetName(L"vertex upload heap");
+  _vertex_default_buffer->SetName(L"vertex default heap");
+#endif  // DEBUG
+
+
   UINT8* upload_resource_heap_begin;
   D3D12_RANGE read_range;
   read_range.Begin = 0;
@@ -491,6 +509,62 @@ int RR::Renderer::Init(void (*update)()) {
   _index_buffer_view->Format = DXGI_FORMAT_R32_UINT;
   _index_buffer_view->SizeInBytes = sizeof(indexes);
 
+  LOG_DEBUG("RR", "Creating depth stencil buffer");
+  // Create depth stencil descriptor heap
+  D3D12_DESCRIPTOR_HEAP_DESC depth_stencil_descriptor_heap_desc = {};
+  depth_stencil_descriptor_heap_desc.NumDescriptors = 1;
+  depth_stencil_descriptor_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+  depth_stencil_descriptor_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+  result = _device->CreateDescriptorHeap(&depth_stencil_descriptor_heap_desc,
+      IID_PPV_ARGS(&_depth_stencil_descriptor_heap));
+
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't create depth stencil descriptor heap");
+    return 1;
+  }
+
+  D3D12_DEPTH_STENCIL_VIEW_DESC depth_stencil_desc = {};
+  depth_stencil_desc.Format = DXGI_FORMAT_D32_FLOAT;
+  depth_stencil_desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+  depth_stencil_desc.Flags = D3D12_DSV_FLAG_NONE;
+
+  D3D12_CLEAR_VALUE depth_stencil_clear_values = {};
+  depth_stencil_clear_values.Format = DXGI_FORMAT_D32_FLOAT;
+  depth_stencil_clear_values.DepthStencil.Depth = 1.0f;
+  depth_stencil_clear_values.DepthStencil.Stencil = 0;
+
+  D3D12_RESOURCE_DESC depth_stencil_buffer_desc = {};
+  depth_stencil_buffer_desc.Format = DXGI_FORMAT_D32_FLOAT;
+  depth_stencil_buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+  depth_stencil_buffer_desc.Alignment = 0;
+  depth_stencil_buffer_desc.Width = window_screen_bounds.right - window_screen_bounds.left;
+  depth_stencil_buffer_desc.Height = window_screen_bounds.bottom - window_screen_bounds.top;
+  depth_stencil_buffer_desc.DepthOrArraySize = 1;
+  depth_stencil_buffer_desc.MipLevels = 0;
+  depth_stencil_buffer_desc.SampleDesc.Count = 1;
+  depth_stencil_buffer_desc.SampleDesc.Quality = 0;
+  depth_stencil_buffer_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+  depth_stencil_buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+  result = _device->CreateCommittedResource(
+      &default_heap_properties, D3D12_HEAP_FLAG_NONE,
+      &depth_stencil_buffer_desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, 
+      &depth_stencil_clear_values, IID_PPV_ARGS(&_depth_scentil_buffer));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't create depth stencil buffer");
+    return 1;
+  }
+
+#ifdef DEBUG
+  _depth_scentil_buffer->SetName(L"Depth/Stencil buffer");
+  _depth_stencil_descriptor_heap->SetName(L"Depth/Stencil descriptor heap");
+#endif  // DEBUG
+
+  _device->CreateDepthStencilView(
+      _depth_scentil_buffer, &depth_stencil_desc,
+      _depth_stencil_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
+
+  printf("\n");
   LOG_DEBUG("RR", "Renderer initialized");
   return 0;
 }
@@ -546,17 +620,28 @@ void RR::Renderer::UpdatePipeline() {
   rt_render_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
   _command_list->ResourceBarrier(1, &rt_render_barrier);
 
-  unsigned int descriptor_size =
-      _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+  unsigned int rt_descriptor_size = _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+  unsigned int depth_descriptor_size = _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+  
   D3D12_CPU_DESCRIPTOR_HANDLE rt_descriptor_handle(
       _rt_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
-  rt_descriptor_handle.ptr += _current_frame * descriptor_size;
 
-  _command_list->OMSetRenderTargets(1, &rt_descriptor_handle, FALSE, nullptr);
+  D3D12_CPU_DESCRIPTOR_HANDLE depth_descriptor_handle(
+      _depth_stencil_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
+  
+  rt_descriptor_handle.ptr += _current_frame * rt_descriptor_size;
+
+  _command_list->OMSetRenderTargets(1, 
+      &rt_descriptor_handle, FALSE, 
+      &depth_descriptor_handle);
 
   const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
-  _command_list->ClearRenderTargetView(rt_descriptor_handle, clearColor, 0,
-                                       nullptr);
+  _command_list->ClearRenderTargetView(
+      rt_descriptor_handle, clearColor, 0, nullptr);
+
+  _command_list->ClearDepthStencilView(
+      depth_descriptor_handle, D3D12_CLEAR_FLAG_DEPTH, 
+      1.0f, 0, 0, nullptr);
 
   RECT window_screen_bounds;
   GetClientRect((HWND)_window->window(), &window_screen_bounds);
@@ -637,6 +722,36 @@ void RR::Renderer::Cleanup() {
   if (_command_list != nullptr) {
     _command_list->Release();
     _command_list = nullptr;
+  }
+
+  if (_pipeline_state != nullptr) {
+    _pipeline_state->Release();
+    _pipeline_state = nullptr;
+  }
+
+  if (_root_signature != nullptr) {
+    _root_signature->Release();
+    _root_signature = nullptr;
+  }
+
+  if (_vertex_default_buffer != nullptr) {
+    _vertex_default_buffer->Release();
+    _vertex_default_buffer = nullptr;
+  }
+
+  if (_index_default_buffer != nullptr) {
+    _index_default_buffer->Release();
+    _index_default_buffer = nullptr;
+  }
+
+  if (_depth_scentil_buffer != nullptr) {
+    _depth_scentil_buffer->Release();
+    _depth_scentil_buffer = nullptr;
+  } 
+  
+  if (_depth_stencil_descriptor_heap != nullptr) {
+    _depth_stencil_descriptor_heap->Release();
+    _depth_stencil_descriptor_heap = nullptr;
   }
 
   for (int i = 0; i < kSwapchainBufferCount; ++i) {

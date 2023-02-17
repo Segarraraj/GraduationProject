@@ -70,6 +70,8 @@ class Renderer {
   std::unique_ptr<D3D12_VERTEX_BUFFER_VIEW> _vertex_buffer_view;
   ID3D12Resource* _index_default_buffer = nullptr;
   std::unique_ptr<D3D12_INDEX_BUFFER_VIEW> _index_buffer_view;
+  ID3D12Resource* _depth_scentil_buffer = nullptr;
+  ID3D12DescriptorHeap* _depth_stencil_descriptor_heap = nullptr;
 
  #ifdef DEBUG
   ID3D12Debug1* _debug_controller = nullptr;
