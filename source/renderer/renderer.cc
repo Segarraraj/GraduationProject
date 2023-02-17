@@ -213,8 +213,7 @@ int RR::Renderer::Init(void (*update)()) {
       LOG_DEBUG("RR", "Couldn't create fence");
       return 1;
     }
-    
-    _fence_values[i] = 0;
+    _fences[i]->Signal(1);
   }
 
   _fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
@@ -368,10 +367,12 @@ int RR::Renderer::Init(void (*update)()) {
       {-0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f},
   };
 
-  D3D12_HEAP_PROPERTIES vertex_default_heap_properties = {};
-  vertex_default_heap_properties.Type = D3D12_HEAP_TYPE_DEFAULT;
-  vertex_default_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-  vertex_default_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+   UINT indexes[] = {0, 1, 2};
+
+  D3D12_HEAP_PROPERTIES default_heap_properties = {};
+  default_heap_properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+  default_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  default_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 
   D3D12_RESOURCE_DESC vertex_resource_desc = {};
   vertex_resource_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -387,7 +388,7 @@ int RR::Renderer::Init(void (*update)()) {
   vertex_resource_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
    
   result = _device->CreateCommittedResource(
-      &vertex_default_heap_properties, D3D12_HEAP_FLAG_NONE, 
+      &default_heap_properties, D3D12_HEAP_FLAG_NONE, 
       &vertex_resource_desc, D3D12_RESOURCE_STATE_COMMON, 
       nullptr, IID_PPV_ARGS(&_vertex_default_buffer));
   if (FAILED(result)) {
@@ -396,17 +397,37 @@ int RR::Renderer::Init(void (*update)()) {
   }
 
   ID3D12Resource* vertex_buffer_upload_heap = nullptr;
-  D3D12_HEAP_PROPERTIES vertex_upload_heap_properties = {};
-  vertex_upload_heap_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
-  vertex_upload_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-  vertex_upload_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+  D3D12_HEAP_PROPERTIES upload_heap_properties = {};
+  upload_heap_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
+  upload_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  upload_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 
   result = _device->CreateCommittedResource(
-      &vertex_upload_heap_properties, D3D12_HEAP_FLAG_NONE,
+      &upload_heap_properties, D3D12_HEAP_FLAG_NONE,
       &vertex_resource_desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
       IID_PPV_ARGS(&vertex_buffer_upload_heap));
   if (FAILED(result)) {
     LOG_ERROR("RR", "Couldn't create vertex buffer upload resource heap");
+    return 1;
+  }
+
+  vertex_resource_desc.Width = sizeof(indexes);
+  result = _device->CreateCommittedResource(
+      &default_heap_properties, D3D12_HEAP_FLAG_NONE, &vertex_resource_desc,
+      D3D12_RESOURCE_STATE_COMMON, nullptr,
+      IID_PPV_ARGS(&_index_default_buffer));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't create index buffer default resource heap");
+    return 1;
+  }
+
+  ID3D12Resource* index_buffer_upload_heap = nullptr;
+  result = _device->CreateCommittedResource(
+      &upload_heap_properties, D3D12_HEAP_FLAG_NONE, &vertex_resource_desc,
+      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+      IID_PPV_ARGS(&index_buffer_upload_heap));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't create index buffer upload resource heap");
     return 1;
   }
 
@@ -421,6 +442,11 @@ int RR::Renderer::Init(void (*update)()) {
   memcpy(upload_resource_heap_begin, vertex_list, sizeof(vertex_list));
   vertex_buffer_upload_heap->Unmap(0, nullptr);
 
+  index_buffer_upload_heap->Map(0, &read_range, 
+      reinterpret_cast<void**>(&upload_resource_heap_begin));
+  memcpy(upload_resource_heap_begin, indexes, sizeof(indexes));
+  index_buffer_upload_heap->Unmap(0, nullptr);
+
   D3D12_RESOURCE_BARRIER vb_upload_resource_heap_barrier = {};
   vb_upload_resource_heap_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
   vb_upload_resource_heap_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -429,25 +455,41 @@ int RR::Renderer::Init(void (*update)()) {
   vb_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
   vb_upload_resource_heap_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
   
+  D3D12_RESOURCE_BARRIER index_upload_resource_heap_barrier = {};
+  index_upload_resource_heap_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+  index_upload_resource_heap_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+  index_upload_resource_heap_barrier.Transition.pResource = _index_default_buffer;
+  index_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+  index_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+  index_upload_resource_heap_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
   _command_list->Reset(_command_allocators[_current_frame], NULL);
   _command_list->ResourceBarrier(1, &vb_upload_resource_heap_barrier);
+  _command_list->ResourceBarrier(1, &index_upload_resource_heap_barrier);
   _command_list->CopyResource(_vertex_default_buffer, vertex_buffer_upload_heap);
+  _command_list->CopyResource(_index_default_buffer, index_buffer_upload_heap);
   vb_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
   vb_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+  index_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+  index_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_INDEX_BUFFER;
   _command_list->ResourceBarrier(1, &vb_upload_resource_heap_barrier);
-  _command_list->Close();
+  _command_list->ResourceBarrier(1, &index_upload_resource_heap_barrier);
+  result = _command_list->Close();
 
   ID3D12CommandList* command_lists[] = {_command_list};
   _command_queue->ExecuteCommandLists(sizeof(command_lists) / sizeof(ID3D12CommandList), command_lists);
 
-  _fence_values[_current_frame]++;   
-  _command_queue->Signal(_fences[_current_frame], _fence_values[_current_frame]);
+  _command_queue->Signal(_fences[_current_frame], 1);
 
   _vertex_buffer_view = std::make_unique<D3D12_VERTEX_BUFFER_VIEW>();
   _vertex_buffer_view->BufferLocation = _vertex_default_buffer->GetGPUVirtualAddress();
   _vertex_buffer_view->StrideInBytes = sizeof(DirectX::XMFLOAT3) * 2;
   _vertex_buffer_view->SizeInBytes = sizeof(vertex_list);
 
+  _index_buffer_view = std::make_unique<D3D12_INDEX_BUFFER_VIEW>();
+  _index_buffer_view->BufferLocation = _index_default_buffer->GetGPUVirtualAddress();
+  _index_buffer_view->Format = DXGI_FORMAT_R32_UINT;
+  _index_buffer_view->SizeInBytes = sizeof(indexes);
 
   LOG_DEBUG("RR", "Renderer initialized");
   return 0;
@@ -461,8 +503,12 @@ void RR::Renderer::Start() {
       DispatchMessage(&message);
     }
 
+    _current_frame = _swap_chain->GetCurrentBackBufferIndex();
+
+    WaitForPreviousFrame();
+    
     update_();
-    WaitForFrame();
+
     UpdatePipeline();
     Render();
   }
@@ -534,7 +580,8 @@ void RR::Renderer::UpdatePipeline() {
   _command_list->RSSetViewports(1, &viewport);
   _command_list->RSSetScissorRects(1, &scissor_rect);
   _command_list->IASetVertexBuffers(0, 1, _vertex_buffer_view.get());
-  _command_list->DrawInstanced(3, 1, 0, 0);
+  _command_list->IASetIndexBuffer(_index_buffer_view.get());
+  _command_list->DrawIndexedInstanced(3, 1, 0, 0, 0);
 
   D3D12_RESOURCE_BARRIER rt_present_barrier = {};
   rt_present_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -557,13 +604,15 @@ void RR::Renderer::Render() {
 
   ID3D12CommandList* command_lists[] = {_command_list};
 
-  _command_queue->ExecuteCommandLists(1, command_lists);
-  _command_queue->Signal(_fences[_current_frame], _fence_values[_current_frame]);
+  _command_queue->ExecuteCommandLists(sizeof(command_lists) / sizeof(ID3D12CommandList), command_lists);
+  _command_queue->Signal(_fences[_current_frame], 1);
   _swap_chain->Present(0, 0);
 }
 
 void RR::Renderer::Cleanup() { 
-  WaitForFrame();
+  for (; _current_frame < kSwapchainBufferCount; _current_frame++) {
+    WaitForPreviousFrame();
+  }
 
   if (_device != nullptr) {
     _device->Release();
@@ -591,14 +640,14 @@ void RR::Renderer::Cleanup() {
   }
 
   for (int i = 0; i < kSwapchainBufferCount; ++i) {
-    if (_render_targets[i] != nullptr) {
-      _render_targets[i]->Release();
-      _render_targets[i] = nullptr;
-    }
-
     if (_command_allocators[i] != nullptr) {
       _command_allocators[i]->Release();
       _command_allocators[i] = nullptr;
+    }
+
+    if (_render_targets[i] != nullptr) {
+      _render_targets[i]->Release();
+      _render_targets[i] = nullptr;
     }
 
     if (_fences[i] != nullptr) {
@@ -608,18 +657,13 @@ void RR::Renderer::Cleanup() {
   };
 }
 
-void RR::Renderer::WaitForFrame() {
+void RR::Renderer::WaitForPreviousFrame() {
   HRESULT result;
 
-  _current_frame = _swap_chain->GetCurrentBackBufferIndex();
-
-  if (_fences[_current_frame]->GetCompletedValue() < _fence_values[_current_frame]) {
-
-    result = _fences[_current_frame]->SetEventOnCompletion(
-        _fence_values[_current_frame], _fence_event);
-
+  if (_fences[_current_frame]->GetCompletedValue() != 1) {
+    _fences[_current_frame]->SetEventOnCompletion(1, _fence_event);
     WaitForSingleObject(_fence_event, INFINITE);
   }
 
-  _fence_values[_current_frame]++;
+  _fences[_current_frame]->Signal(0);
 }
