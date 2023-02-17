@@ -297,7 +297,8 @@ int RR::Renderer::Init(void (*update)()) {
   pixel_shader_bytecode.pShaderBytecode = fragment_shader->GetBufferPointer();
 
   D3D12_INPUT_ELEMENT_DESC input_layout[] = {
-      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      {"COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
   };
 
   D3D12_INPUT_LAYOUT_DESC input_layout_desc = {};
@@ -362,7 +363,9 @@ int RR::Renderer::Init(void (*update)()) {
 
   // Create vertex buffer
   DirectX::XMFLOAT3 vertex_list[] = {
-      {0.0f, 0.5f, 0.5f}, {0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, 0.5f}
+      { 0.0f,  0.5f, 0.5f}, {1.0f, 0.0f, 0.0f},
+      { 0.5f, -0.5f, 0.5f}, {0.0f, 1.0f, 0.0f},
+      {-0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f},
   };
 
   D3D12_HEAP_PROPERTIES vertex_default_heap_properties = {};
@@ -442,7 +445,7 @@ int RR::Renderer::Init(void (*update)()) {
 
   _vertex_buffer_view = std::make_unique<D3D12_VERTEX_BUFFER_VIEW>();
   _vertex_buffer_view->BufferLocation = _vertex_default_buffer->GetGPUVirtualAddress();
-  _vertex_buffer_view->StrideInBytes = sizeof(DirectX::XMFLOAT3);
+  _vertex_buffer_view->StrideInBytes = sizeof(DirectX::XMFLOAT3) * 2;
   _vertex_buffer_view->SizeInBytes = sizeof(vertex_list);
 
 
