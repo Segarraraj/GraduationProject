@@ -35,7 +35,7 @@ const void* RR::Window::window() const { return _window; }
 float RR::Window::width() const {
   RECT bounds;
   GetClientRect((HWND)_window, &bounds);
-  return ;
+  return bounds.right - bounds.left;
 }
 
 float RR::Window::height() const {
