@@ -649,8 +649,15 @@ int RR::Renderer::Init(void (*update)()) {
 
 void RR::Renderer::Start() {
   std::chrono::time_point<std::chrono::steady_clock> frame_start, frame_end;
+
   while (_running) {
+    do {
+      frame_end = std::chrono::high_resolution_clock::now();
+      delta_time = std::chrono::duration<float, std::milli>(frame_end - frame_start).count();
+    } while (delta_time < (1000.0f / 60.0f));
+
     frame_start = std::chrono::high_resolution_clock::now();
+
     MSG message;
     while (PeekMessage(&message, (HWND)_window->window(), 0, 0, PM_REMOVE)) {
       TranslateMessage(&message);
@@ -682,8 +689,6 @@ void RR::Renderer::Start() {
 
     UpdatePipeline();
     Render();
-
-    frame_end = std::chrono::high_resolution_clock::now();
   }
 
   Cleanup();

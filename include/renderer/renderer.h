@@ -34,6 +34,8 @@ struct UniformStruct {
 
 class Renderer {
  public:
+  float delta_time = 0.0f;
+
   Renderer();
 
   Renderer(const Renderer&) = delete;
