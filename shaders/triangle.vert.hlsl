@@ -1,3 +1,7 @@
+cbuffer CB : register(b0) { 
+  float3 color_multiplier; 
+};
+
 struct VertexInput {
   float3 position : POSITION;
   float3 color : COLOR;
@@ -11,6 +15,6 @@ struct VertexOutput {
 VertexOutput main(VertexInput input) {
   VertexOutput output;
   output.position = float4(input.position, 1.0f);
-  output.color = input.color;
+  output.color = input.color * color_multiplier;
   return output;
 }

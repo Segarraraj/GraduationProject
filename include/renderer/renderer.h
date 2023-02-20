@@ -72,6 +72,8 @@ class Renderer {
   std::unique_ptr<D3D12_INDEX_BUFFER_VIEW> _index_buffer_view;
   ID3D12Resource* _depth_scentil_buffer = nullptr;
   ID3D12DescriptorHeap* _depth_stencil_descriptor_heap = nullptr;
+  ID3D12DescriptorHeap* _constant_buffer_descriptor_heap[kSwapchainBufferCount];
+  ID3D12Resource* _constant_buffer_upload_heap[kSwapchainBufferCount];
 
  #ifdef DEBUG
   ID3D12Debug1* _debug_controller = nullptr;

@@ -6,6 +6,10 @@
 #include <dxgi1_6.h>
 #include <d3d12sdklayers.h>
 #include <d3dcompiler.h>
+#include <stdlib.h>
+#include <time.h>
+
+#include <chrono>
 
 #include "utils.hpp"
 #include "renderer/window.h"
@@ -35,6 +39,8 @@ RR::Renderer::~Renderer() {}
 
 int RR::Renderer::Init(void (*update)()) {
   LOG_DEBUG("RR", "Initializing renderer");
+
+  srand(time(NULL));
   
   // Set client update logic callback
   update_ = update;
@@ -232,14 +238,34 @@ int RR::Renderer::Init(void (*update)()) {
     LOG_WARNING("RR", "Current device don't support root signature v1.1, using v1.0");
     root_signature_feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
   }
+  D3D12_DESCRIPTOR_RANGE1 descriptor_table_ranges[1] = {};
+  descriptor_table_ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+  descriptor_table_ranges[0].NumDescriptors = 1;
+  descriptor_table_ranges[0].BaseShaderRegister = 0;
+  descriptor_table_ranges[0].RegisterSpace = 0;
+  descriptor_table_ranges[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+  D3D12_ROOT_DESCRIPTOR_TABLE1 descriptor_table = {};
+  descriptor_table.NumDescriptorRanges = sizeof(descriptor_table_ranges) / sizeof(D3D12_DESCRIPTOR_RANGE);
+  descriptor_table.pDescriptorRanges = descriptor_table_ranges;
+
+  D3D12_ROOT_PARAMETER1 root_parameters[1] = {};
+  root_parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+  root_parameters[0].DescriptorTable = descriptor_table;
+  root_parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
   D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
   root_signature_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-  root_signature_desc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-  root_signature_desc.Desc_1_1.NumParameters = 0;
-  root_signature_desc.Desc_1_1.pParameters = nullptr;      
+  root_signature_desc.Desc_1_1.NumParameters = sizeof(root_parameters) / sizeof(D3D12_ROOT_PARAMETER);
+  root_signature_desc.Desc_1_1.pParameters = root_parameters;      
   root_signature_desc.Desc_1_1.NumStaticSamplers = 0;
   root_signature_desc.Desc_1_1.pStaticSamplers = nullptr;
+  root_signature_desc.Desc_1_1.Flags = 
+      D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | 
+      D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+      D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+      D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+      D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 
   ID3DBlob* signature = nullptr;
   ID3DBlob* error = nullptr;
@@ -564,13 +590,67 @@ int RR::Renderer::Init(void (*update)()) {
       _depth_scentil_buffer, &depth_stencil_desc,
       _depth_stencil_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
 
+  D3D12_HEAP_PROPERTIES constant_buffer_properties = {};
+  constant_buffer_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
+  constant_buffer_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  constant_buffer_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+  D3D12_RESOURCE_DESC constant_buffer_desc = {};
+  constant_buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+  constant_buffer_desc.Alignment = 0;
+  constant_buffer_desc.Width = (sizeof(DirectX::XMFLOAT3) + 255) & ~255;
+  constant_buffer_desc.Height = 1;
+  constant_buffer_desc.DepthOrArraySize = 1;
+  constant_buffer_desc.MipLevels = 1;
+  constant_buffer_desc.Format = DXGI_FORMAT_UNKNOWN;
+  constant_buffer_desc.SampleDesc.Count = 1;
+  constant_buffer_desc.SampleDesc.Quality = 0;
+  constant_buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  constant_buffer_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+  D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
+  heap_desc.NumDescriptors = 1;
+  heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+  heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+
+  // Create constant buffer
+  for (unsigned int i = 0; i < kSwapchainBufferCount; ++i) {
+    result = _device->CreateDescriptorHeap(&heap_desc, 
+        IID_PPV_ARGS(&_constant_buffer_descriptor_heap[i]));
+    if (FAILED(result)) {
+      LOG_ERROR("RR", "Couldn't create descriptor heap[%i]", i);
+      return 1;
+    }
+
+    result = _device->CreateCommittedResource(
+        &constant_buffer_properties, D3D12_HEAP_FLAG_NONE, 
+        &constant_buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, 
+        nullptr, IID_PPV_ARGS(&_constant_buffer_upload_heap[i]));
+
+    if (FAILED(result)) {
+      LOG_ERROR("RR", "Couldn't create constant buffer[%i]", i);
+      return 1;
+    }
+
+    D3D12_CONSTANT_BUFFER_VIEW_DESC constant_buffer_view_desc = {};
+    constant_buffer_view_desc.BufferLocation = _constant_buffer_upload_heap[i]->GetGPUVirtualAddress();
+    constant_buffer_view_desc.SizeInBytes = constant_buffer_desc.Width;
+    _device->CreateConstantBufferView(&constant_buffer_view_desc,
+        _constant_buffer_descriptor_heap[i]->GetCPUDescriptorHandleForHeapStart());
+    
+    _constant_buffer_descriptor_heap[i]->SetName(L"Constant buffer upload heap");
+    _constant_buffer_upload_heap[i]->SetName(L"Constant buffer upload heap");
+  }
+
   printf("\n");
   LOG_DEBUG("RR", "Renderer initialized");
   return 0;
 }
 
 void RR::Renderer::Start() {
+  std::chrono::time_point<std::chrono::steady_clock> frame_start, frame_end;
   while (_running) {
+    frame_start = std::chrono::high_resolution_clock::now();
     MSG message;
     while (PeekMessage(&message, (HWND)_window->window(), 0, 0, PM_REMOVE)) {
       TranslateMessage(&message);
@@ -583,8 +663,27 @@ void RR::Renderer::Start() {
     
     update_();
 
+    DirectX::XMFLOAT3 color = {
+        (rand() % 101) / 100.0f, 
+        (rand() % 101) / 100.0f,
+        (rand() % 101) / 100.0f
+    };
+
+    UINT8* upload_resource_heap_begin;
+    D3D12_RANGE read_range;
+    read_range.Begin = 0;
+    read_range.End = 0;
+
+    // Copy data to upload resource heap
+    _constant_buffer_upload_heap[_current_frame]->Map(
+        0, &read_range, reinterpret_cast<void**>(&upload_resource_heap_begin));
+    memcpy(upload_resource_heap_begin, &color, sizeof(color));
+    _constant_buffer_upload_heap[_current_frame]->Unmap(0, nullptr);
+
     UpdatePipeline();
     Render();
+
+    frame_end = std::chrono::high_resolution_clock::now();
   }
 
   Cleanup();
@@ -660,8 +759,19 @@ void RR::Renderer::UpdatePipeline() {
   scissor_rect.right = window_screen_bounds.right - window_screen_bounds.left;
   scissor_rect.bottom = window_screen_bounds.bottom - window_screen_bounds.top;
 
+  ID3D12DescriptorHeap* descriptor_heaps[] = { 
+    _constant_buffer_descriptor_heap[_current_frame]
+  };
+
+
+
   _command_list->SetPipelineState(_pipeline_state);
   _command_list->SetGraphicsRootSignature(_root_signature);
+  _command_list->SetDescriptorHeaps(
+      sizeof(descriptor_heaps) / sizeof(ID3D12DescriptorHeap),
+      descriptor_heaps);
+  _command_list->SetGraphicsRootDescriptorTable(0, 
+      _constant_buffer_descriptor_heap[_current_frame]->GetGPUDescriptorHandleForHeapStart());
   _command_list->RSSetViewports(1, &viewport);
   _command_list->RSSetScissorRects(1, &scissor_rect);
   _command_list->IASetVertexBuffers(0, 1, _vertex_buffer_view.get());
@@ -758,6 +868,16 @@ void RR::Renderer::Cleanup() {
     if (_command_allocators[i] != nullptr) {
       _command_allocators[i]->Release();
       _command_allocators[i] = nullptr;
+    }
+
+    if (_constant_buffer_descriptor_heap[i] != nullptr) {
+      _constant_buffer_descriptor_heap[i]->Release();
+      _constant_buffer_descriptor_heap[i] = nullptr;
+    }
+
+    if (_constant_buffer_upload_heap[i] != nullptr) {
+      _constant_buffer_upload_heap[i]->Release();
+      _constant_buffer_upload_heap[i] = nullptr;
     }
 
     if (_render_targets[i] != nullptr) {
