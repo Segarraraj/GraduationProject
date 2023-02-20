@@ -20,6 +20,9 @@ class Window {
   void Show() const;
 
   const void* window() const;
+  float width() const;
+  float height() const;
+  float aspectRatio() const;
  private:
   void* _window = nullptr;
 };

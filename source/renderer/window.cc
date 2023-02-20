@@ -31,3 +31,21 @@ void RR::Window::Init(void* instance, const char* class_name,
 void RR::Window::Show() const { ShowWindow((HWND)_window, 1); }
 
 const void* RR::Window::window() const { return _window; }
+
+float RR::Window::width() const {
+  RECT bounds;
+  GetClientRect((HWND)_window, &bounds);
+  return ;
+}
+
+float RR::Window::height() const {
+  RECT bounds;
+  GetClientRect((HWND)_window, &bounds);
+  return bounds.bottom - bounds.top;
+}
+
+float RR::Window::aspectRatio() const {
+  RECT bounds;
+  GetClientRect((HWND)_window, &bounds);
+  return (bounds.right - bounds.left) / (bounds.bottom - bounds.top);
+}
