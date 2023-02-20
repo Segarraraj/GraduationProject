@@ -1,5 +1,7 @@
 cbuffer CB : register(b0) { 
-  float3 color_multiplier; 
+  float4x4 model;
+  float4x4 view;
+  float4x4 projection;
 };
 
 struct VertexInput {
@@ -14,7 +16,7 @@ struct VertexOutput {
 
 VertexOutput main(VertexInput input) {
   VertexOutput output;
-  output.position = float4(input.position, 1.0f);
-  output.color = input.color * color_multiplier;
+  output.position = mul(float4(input.position, 1.0f), mul(model, mul(view, projection)));
+  output.color = input.color;
   return output;
 }

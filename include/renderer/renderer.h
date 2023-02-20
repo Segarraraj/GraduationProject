@@ -26,9 +26,9 @@ struct ID3D12DebugDevice;
 namespace RR {
 class Window;
 
-struct UniformStruct {
-  DirectX::XMFLOAT4X4 view;
+struct ConstantBufferStruct {
   DirectX::XMFLOAT4X4 model;
+  DirectX::XMFLOAT4X4 view;
   DirectX::XMFLOAT4X4 projection;
 };
 
@@ -74,7 +74,6 @@ class Renderer {
   std::unique_ptr<D3D12_INDEX_BUFFER_VIEW> _index_buffer_view;
   ID3D12Resource* _depth_scentil_buffer = nullptr;
   ID3D12DescriptorHeap* _depth_stencil_descriptor_heap = nullptr;
-  ID3D12DescriptorHeap* _constant_buffer_descriptor_heap[kSwapchainBufferCount];
   ID3D12Resource* _constant_buffer_upload_heap[kSwapchainBufferCount];
 
  #ifdef DEBUG
