@@ -47,5 +47,9 @@ float RR::Window::height() const {
 float RR::Window::aspectRatio() const {
   RECT bounds;
   GetClientRect((HWND)_window, &bounds);
-  return (bounds.right - bounds.left) / (bounds.bottom - bounds.top);
+  if ((bounds.bottom - bounds.top) != 0) {
+    return (bounds.right - bounds.left) / (bounds.bottom - bounds.top);
+  } else {
+    return 1.0f;
+  }
 }

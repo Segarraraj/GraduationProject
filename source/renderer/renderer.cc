@@ -679,8 +679,9 @@ int RR::Renderer::Init(void (*update)()) {
 }
 
 void RR::Renderer::Start() {
-  std::chrono::time_point<std::chrono::steady_clock> app_start, frame_start, frame_end;
-  app_start = std::chrono::high_resolution_clock::now();
+  std::chrono::time_point<std::chrono::steady_clock> renderer_start, frame_start, frame_end;
+  renderer_start = std::chrono::high_resolution_clock::now();
+  
   while (_running) {
     do {
       frame_end = std::chrono::high_resolution_clock::now();
@@ -701,7 +702,7 @@ void RR::Renderer::Start() {
     
     update_();
 
-    float elapsed_time = std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - app_start).count();
+    float elapsed_time = std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - renderer_start).count();
     ConstantBufferStruct cube1 = {}, cube2 = {};
 
     DirectX::XMMATRIX temp = DirectX::XMMatrixIdentity() *
@@ -720,8 +721,8 @@ void RR::Renderer::Start() {
     DirectX::XMStoreFloat4x4(&cube2.model, temp);
 
     temp = DirectX::XMMatrixLookAtLH(DirectX::XMVectorSet(0.0f, 2.0f, -4.0f, 0.0f),
-                                  DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f),
-                                  DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+                                     DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f),
+                                     DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
 
     temp = DirectX::XMMatrixTranspose(temp);
     DirectX::XMStoreFloat4x4(&cube1.view, temp);
