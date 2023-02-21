@@ -239,6 +239,7 @@ int RR::Renderer::Init(void (*update)()) {
   D3D12_ROOT_DESCRIPTOR1 root_descriptor = {};
   root_descriptor.RegisterSpace = 0;
   root_descriptor.ShaderRegister = 0;
+  root_descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
 
   D3D12_ROOT_PARAMETER1 root_parameters[1] = {};
   root_parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -647,7 +648,7 @@ int RR::Renderer::Init(void (*update)()) {
   D3D12_RESOURCE_DESC constant_buffer_desc = {};
   constant_buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
   constant_buffer_desc.Alignment = 0;
-  constant_buffer_desc.Width = (sizeof(ConstantBufferStruct) * 2 + 255) & ~255;
+  constant_buffer_desc.Width = (sizeof(ConstantBufferStruct) + 255) & ~255;
   constant_buffer_desc.Height = 1;
   constant_buffer_desc.DepthOrArraySize = 1;
   constant_buffer_desc.MipLevels = 1;
@@ -657,13 +658,8 @@ int RR::Renderer::Init(void (*update)()) {
   constant_buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   constant_buffer_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-  D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
-  heap_desc.NumDescriptors = 1;
-  heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-  heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-
   // Create constant buffer
-  for (unsigned int i = 0; i < kSwapchainBufferCount; ++i) {
+  for (unsigned int i = 0; i < kSwapchainBufferCount * 2; ++i) {
     result = _device->CreateCommittedResource(
         &constant_buffer_properties, D3D12_HEAP_FLAG_NONE, 
         &constant_buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, 
@@ -716,9 +712,9 @@ void RR::Renderer::Start() {
     DirectX::XMStoreFloat4x4(&cube1.model, temp);
 
     temp = DirectX::XMMatrixIdentity() *
-           DirectX::XMMatrixTranslation(1.5f, .0f, .0f) *
-           DirectX::XMMatrixRotationZ(elapsed_time * 0.08f) *
-           DirectX::XMMatrixScaling(.5f, .5f, .5f) * temp;
+           DirectX::XMMatrixRotationZ(elapsed_time * 0.003f) *
+           DirectX::XMMatrixTranslation(7.0f, .0f, .0f) *
+           DirectX::XMMatrixScaling(.25f, .25f, .25f) * temp;
 
     temp = DirectX::XMMatrixTranspose(temp);
     DirectX::XMStoreFloat4x4(&cube2.model, temp);
@@ -741,12 +737,13 @@ void RR::Renderer::Start() {
     D3D12_RANGE range = {};
     UINT* buffer_start = nullptr;
 
-    _constant_buffer_upload_heap[_current_frame]->Map(0, &range, 
-        reinterpret_cast<void**>(&buffer_start));
+    _constant_buffer_upload_heap[_current_frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
     memcpy(buffer_start, &cube1, sizeof(ConstantBufferStruct));
-    memcpy(buffer_start + ((sizeof(ConstantBufferStruct) + 255) & ~255), &cube2,
-           sizeof(ConstantBufferStruct));
     _constant_buffer_upload_heap[_current_frame]->Unmap(0, nullptr);
+
+    _constant_buffer_upload_heap[_current_frame + kSwapchainBufferCount]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
+    memcpy(buffer_start, &cube2, sizeof(ConstantBufferStruct));
+    _constant_buffer_upload_heap[_current_frame + kSwapchainBufferCount]->Unmap(0, nullptr);
 
     UpdatePipeline();
     Render();
@@ -770,7 +767,7 @@ void RR::Renderer::UpdatePipeline() {
     return;
   }
 
-  result = _command_list->Reset(_command_allocators[_current_frame], NULL);
+  result = _command_list->Reset(_command_allocators[_current_frame], _pipeline_state);
   if (FAILED(result)) {
     _running = false;
     return;
@@ -826,7 +823,6 @@ void RR::Renderer::UpdatePipeline() {
       _constant_buffer_upload_heap[_current_frame]->GetGPUVirtualAddress();
 
   _command_list->SetGraphicsRootSignature(_root_signature);
-  _command_list->SetPipelineState(_pipeline_state);
   _command_list->RSSetViewports(1, &viewport);
   _command_list->RSSetScissorRects(1, &scissor_rect);
   _command_list->IASetVertexBuffers(0, 1, _vertex_buffer_view.get());
@@ -834,7 +830,9 @@ void RR::Renderer::UpdatePipeline() {
   _command_list->IASetIndexBuffer(_index_buffer_view.get());
   _command_list->SetGraphicsRootConstantBufferView(0, constant_buffer_start);
   _command_list->DrawIndexedInstanced(36, 1, 0, 0, 0);
-  _command_list->SetGraphicsRootConstantBufferView(0, constant_buffer_start + ((sizeof(ConstantBufferStruct) + 255) & ~255));
+  constant_buffer_start =
+      _constant_buffer_upload_heap[_current_frame + kSwapchainBufferCount]->GetGPUVirtualAddress();
+  _command_list->SetGraphicsRootConstantBufferView(0, constant_buffer_start);
   _command_list->DrawIndexedInstanced(36, 1, 0, 0, 0);
 
   D3D12_RESOURCE_BARRIER rt_present_barrier = {};
