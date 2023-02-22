@@ -25,6 +25,9 @@ static long long CALLBACK WindowProc(void* window, unsigned int message,
     case WM_CLOSE:
       renderer->Stop();
       break;
+    case WM_SIZE:
+      renderer->Resize();
+      break;
     default: {
       result = DefWindowProc((HWND)window, message, wParam, lParam);
       break;
@@ -61,7 +64,6 @@ int RR::Renderer::Init(void (*update)()) {
   result = D3D12GetDebugInterface(IID_PPV_ARGS(&_debug_controller));
   if (FAILED(result)) {
     LOG_ERROR("RR", "Couldn't get debug interface");
-    Cleanup();
     return 1;
   }
 
@@ -76,7 +78,6 @@ int RR::Renderer::Init(void (*update)()) {
   result = CreateDXGIFactory2(factory_flags, IID_PPV_ARGS(&factory));
   if (FAILED(result)) {
     LOG_ERROR("RR", "Couldn't create factory");
-    Cleanup();
     return 1;
   }
 
@@ -123,9 +124,9 @@ int RR::Renderer::Init(void (*update)()) {
   result = _device->CreateCommandQueue(&command_queue_desc, IID_PPV_ARGS(&_command_queue));
   if (FAILED(result)) {
     LOG_ERROR("RR", "Couldn't create command queue");
-    Cleanup();
     return 1;
   }
+  _command_queue->SetName(L"Graphics command queue");
 
   // Create swapchain
   LOG_DEBUG("RR", "Creating swapchain");
@@ -556,6 +557,7 @@ int RR::Renderer::Init(void (*update)()) {
   index_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
   index_upload_resource_heap_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
+  _fences[_current_frame]->Signal(0);
   _command_list->Reset(_command_allocators[_current_frame], NULL);
   _command_list->ResourceBarrier(1, &vb_upload_resource_heap_barrier);
   _command_list->ResourceBarrier(1, &index_upload_resource_heap_barrier);
@@ -571,7 +573,6 @@ int RR::Renderer::Init(void (*update)()) {
 
   ID3D12CommandList* command_lists[] = {_command_list};
   _command_queue->ExecuteCommandLists(sizeof(command_lists) / sizeof(ID3D12CommandList), command_lists);
-
   _command_queue->Signal(_fences[_current_frame], 1);
 
   _vertex_buffer_view = std::make_unique<D3D12_VERTEX_BUFFER_VIEW>();
@@ -758,7 +759,21 @@ void RR::Renderer::Stop() {
 }
 
 void RR::Renderer::Resize() {
+  if (_swap_chain == nullptr) {
+    return;
+  }
 
+  for (_current_frame = 0; _current_frame < kSwapchainBufferCount; _current_frame++) {
+    WaitForPreviousFrame();
+  }
+
+  for (unsigned int i = 0; i < kSwapchainBufferCount; i++) {
+    _render_targets[i]->Release();
+  }
+
+  // todo resize depth stencil buffer
+  _swap_chain->ResizeBuffers(kSwapchainBufferCount, _window->width(),
+                              _window->height(), DXGI_FORMAT_UNKNOWN, 0);
 }
 
 void RR::Renderer::UpdatePipeline() { 
@@ -863,7 +878,7 @@ void RR::Renderer::Render() {
 }
 
 void RR::Renderer::Cleanup() { 
-  for (; _current_frame < kSwapchainBufferCount; _current_frame++) {
+  for (_current_frame = 0; _current_frame < kSwapchainBufferCount; _current_frame++) {
     WaitForPreviousFrame();
   }
 
@@ -920,7 +935,7 @@ void RR::Renderer::Cleanup() {
   if (_depth_stencil_descriptor_heap != nullptr) {
     _depth_stencil_descriptor_heap->Release();
     _depth_stencil_descriptor_heap = nullptr;
-  }
+  }  
 
   for (int i = 0; i < kSwapchainBufferCount; ++i) {
     if (_command_allocators[i] != nullptr) {
@@ -933,16 +948,16 @@ void RR::Renderer::Cleanup() {
       _constant_buffer_upload_heap[i] = nullptr;
     }
 
-    if (_render_targets[i] != nullptr) {
-      _render_targets[i]->Release();
-      _render_targets[i] = nullptr;
-    }
-
     if (_fences[i] != nullptr) {
       _fences[i]->Release();
       _fences[i] = nullptr;
     }
-  };
+
+    if (_render_targets[i] != nullptr) {
+      _render_targets[i]->Release();
+      _render_targets[i] = nullptr;
+    }
+  }
 }
 
 void RR::Renderer::WaitForPreviousFrame() {
