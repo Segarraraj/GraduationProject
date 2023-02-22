@@ -1,5 +1,5 @@
-#ifndef __PROJECT_RENDERER_WINDOW__
-#define __PROJECT_RENDERER_WINDOW__ 1
+#ifndef __WINDOW_H__
+#define __WINDOW_H__ 1
 
 namespace RR {
 class Window {
@@ -28,6 +28,6 @@ class Window {
 };
 }  // names   pace RR
 
-#endif  // !__PROJECT_RENDERER_WINDOW__
+#endif  // !__WINDOW_H__
 
 

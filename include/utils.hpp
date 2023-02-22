@@ -1,5 +1,5 @@
-#ifndef __PROJECT_UTILS__
-#define __PROJECT_UTILS__ 1
+#ifndef __UTILS_H__
+#define __UTILS_H__ 1
 
 #include <vector>
 #include <fstream>
@@ -27,4 +27,4 @@ std::vector<char> ReadFile(const char* file_name) {
 }
 }
 
-#endif  // !__PROJECT_UTILS__
+#endif  // !__UTILS_H__

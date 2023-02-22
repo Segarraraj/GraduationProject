@@ -1,5 +1,5 @@
-#ifndef __PROJECT_RENDERER_RENDERER__
-#define __PROJECT_RENDERER_RENDERER__ 1
+#ifndef __RENDERER_H__
+#define __RENDERER_H__ 1
 
 #include <DirectXMath.h>
 
@@ -93,4 +93,4 @@ class Renderer {
 };
 }
 
-#endif  // !__PROJECT_RENDERER_RENDERER__
+#endif  // !__RENDERER_H__
