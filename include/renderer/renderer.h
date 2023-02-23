@@ -4,6 +4,7 @@
 #include <DirectXMath.h>
 
 #include <memory>
+#include <list>
 
 struct ID3D12Device;
 struct IDXGISwapChain3;
@@ -25,12 +26,7 @@ struct ID3D12DebugDevice;
 
 namespace RR {
 class Window;
-
-struct ConstantBufferStruct {
-  DirectX::XMFLOAT4X4 model;
-  DirectX::XMFLOAT4X4 view;
-  DirectX::XMFLOAT4X4 projection;
-};
+class Entity;
 
 class Renderer {
  public:
@@ -51,10 +47,17 @@ class Renderer {
   void Stop();
   void Resize();
 
+  std::shared_ptr<Entity> RegisterEntity(uint32_t component_types);
+
  private:
-  static const unsigned int kSwapchainBufferCount = 3;
+  static const uint16_t kSwapchainBufferCount = 3;
 
   std::unique_ptr<RR::Window> _window;
+  std::list<std::shared_ptr<Entity>> _entities;
+
+  uint16_t _current_frame = 0;
+  bool _running = true;
+  void (*update_)() = nullptr;
 
   ID3D12Device* _device = nullptr;
   IDXGISwapChain3* _swap_chain = nullptr;
@@ -80,11 +83,6 @@ class Renderer {
   ID3D12Debug1* _debug_controller = nullptr;
   ID3D12DebugDevice* _debug_device = nullptr;
  #endif
-
-  void (*update_)() = nullptr;
-
-  bool _running = true;
-  int _current_frame = 0;
 
   void UpdatePipeline();
   void Render();

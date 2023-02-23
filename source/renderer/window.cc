@@ -32,13 +32,13 @@ void RR::Window::Show() const { ShowWindow((HWND)_window, 1); }
 
 const void* RR::Window::window() const { return _window; }
 
-float RR::Window::width() const {
+uint32_t RR::Window::width() const {
   RECT bounds;
   GetClientRect((HWND)_window, &bounds);
   return bounds.right - bounds.left;
 }
 
-float RR::Window::height() const {
+uint32_t RR::Window::height() const {
   RECT bounds;
   GetClientRect((HWND)_window, &bounds);
   return bounds.bottom - bounds.top;

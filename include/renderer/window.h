@@ -1,6 +1,8 @@
 #ifndef __WINDOW_H__
 #define __WINDOW_H__ 1
 
+#include <cstdint>
+
 namespace RR {
 class Window {
  public:
@@ -20,8 +22,8 @@ class Window {
   void Show() const;
 
   const void* window() const;
-  float width() const;
-  float height() const;
+  uint32_t width() const;
+  uint32_t height() const;
   float aspectRatio() const;
  private:
   void* _window = nullptr;

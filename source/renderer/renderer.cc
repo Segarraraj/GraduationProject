@@ -12,8 +12,10 @@
 #include <chrono>
 
 #include "utils.hpp"
+#include "renderer/common.hpp"
 #include "renderer/window.h"
 #include "renderer/logger.h"
+#include "renderer/entity.h"
 
 static long long CALLBACK WindowProc(void* window, unsigned int message,
                               unsigned long long wParam, long long lParam) {
@@ -180,7 +182,7 @@ int RR::Renderer::Init(void (*update)()) {
   D3D12_CPU_DESCRIPTOR_HANDLE rt_descriptor_handle(
       _rt_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
 
-  for (unsigned int i = 0; i < kSwapchainBufferCount; i++) {
+  for (uint16_t i = 0; i < kSwapchainBufferCount; i++) {
     _swap_chain->GetBuffer(i, IID_PPV_ARGS(&_render_targets[i]));
     _device->CreateRenderTargetView(_render_targets[i], nullptr, rt_descriptor_handle);
     _render_targets[i]->SetName(L"Render Target");
@@ -190,7 +192,7 @@ int RR::Renderer::Init(void (*update)()) {
   // Create command allocators
   LOG_DEBUG("RR", "Creating command allocators");
 
-  for (unsigned int i = 0; i < kSwapchainBufferCount; i++) {
+  for (uint16_t i = 0; i < kSwapchainBufferCount; i++) {
     result = _device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
                  IID_PPV_ARGS(&_command_allocators[i]));
   }
@@ -212,7 +214,7 @@ int RR::Renderer::Init(void (*update)()) {
   // Create fences
   LOG_DEBUG("RR", "Creating fences");
 
-  for (unsigned int i = 0; i < kSwapchainBufferCount; i++) {
+  for (uint16_t i = 0; i < kSwapchainBufferCount; i++) {
     result = _device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fences[i]));
     if (FAILED(result)) {
       LOG_DEBUG("RR", "Couldn't create fence");
@@ -660,7 +662,7 @@ int RR::Renderer::Init(void (*update)()) {
   constant_buffer_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
   // Create constant buffer
-  for (unsigned int i = 0; i < kSwapchainBufferCount * 2; ++i) {
+  for (uint16_t i = 0; i < kSwapchainBufferCount * 2; ++i) {
     result = _device->CreateCommittedResource(
         &constant_buffer_properties, D3D12_HEAP_FLAG_NONE, 
         &constant_buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, 
@@ -767,13 +769,22 @@ void RR::Renderer::Resize() {
     WaitForPreviousFrame();
   }
 
-  for (unsigned int i = 0; i < kSwapchainBufferCount; i++) {
+  for (uint16_t i = 0; i < kSwapchainBufferCount; i++) {
     _render_targets[i]->Release();
   }
 
   // todo resize depth stencil buffer
   _swap_chain->ResizeBuffers(kSwapchainBufferCount, _window->width(),
                               _window->height(), DXGI_FORMAT_UNKNOWN, 0);
+}
+
+std::shared_ptr<RR::Entity> RR::Renderer::RegisterEntity(uint32_t component_types) {
+  component_types |= ComponentTypes::kComponentType_LocalTransform |
+                     ComponentTypes::kComponentType_WorldTransform;
+
+  std::shared_ptr<Entity> new_entity = std::make_shared<Entity>(component_types);
+  _entities.push_back(new_entity);
+  return new_entity;
 }
 
 void RR::Renderer::UpdatePipeline() { 
@@ -937,7 +948,7 @@ void RR::Renderer::Cleanup() {
     _depth_stencil_descriptor_heap = nullptr;
   }  
 
-  for (int i = 0; i < kSwapchainBufferCount; ++i) {
+  for (uint16_t i = 0; i < kSwapchainBufferCount; ++i) {
     if (_command_allocators[i] != nullptr) {
       _command_allocators[i]->Release();
       _command_allocators[i] = nullptr;
@@ -961,8 +972,6 @@ void RR::Renderer::Cleanup() {
 }
 
 void RR::Renderer::WaitForPreviousFrame() {
-  HRESULT result;
-
   if (_fences[_current_frame]->GetCompletedValue() != 1) {
     _fences[_current_frame]->SetEventOnCompletion(1, _fence_event);
     WaitForSingleObject(_fence_event, INFINITE);
