@@ -44,13 +44,14 @@ RR::Renderer::Renderer() {}
 
 RR::Renderer::~Renderer() {}
 
-int RR::Renderer::Init(void (*update)()) {
+int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   LOG_DEBUG("RR", "Initializing renderer");
 
   srand(time(NULL));
   
   // Set client update logic callback
-  update_ = update;
+  _update = update;
+  _user_data = user_data;
 
   // Initialize window
   _window = std::make_unique<RR::Window>();
@@ -695,7 +696,7 @@ void RR::Renderer::Start() {
 
     frame_start = std::chrono::high_resolution_clock::now();
     _current_frame = _swap_chain->GetCurrentBackBufferIndex();
-    time = std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - renderer_start).count();
+    elapsed_time = std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - renderer_start).count();
 
     MSG message;
     while (PeekMessage(&message, (HWND)_window->window(), 0, 0, PM_REMOVE)) {
@@ -705,7 +706,7 @@ void RR::Renderer::Start() {
 
     WaitForPreviousFrame();
     
-    update_();
+    _update(_user_data);
     InternalUpdate();
     UpdatePipeline();
     Render();
@@ -749,14 +750,14 @@ void RR::Renderer::InternalUpdate() {
   ConstantBufferStruct cube1 = {}, cube2 = {};
 
   DirectX::XMMATRIX temp = DirectX::XMMatrixIdentity() *
-                           DirectX::XMMatrixRotationY(time * 0.001f) *
+                           DirectX::XMMatrixRotationY(elapsed_time * 0.001f) *
                            DirectX::XMMatrixScaling(.5f, .5f, .5f);
 
   temp = DirectX::XMMatrixTranspose(temp);
   DirectX::XMStoreFloat4x4(&cube1.model, temp);
 
   temp = DirectX::XMMatrixIdentity() *
-         DirectX::XMMatrixRotationZ(time * 0.003f) *
+         DirectX::XMMatrixRotationZ(elapsed_time * 0.003f) *
          DirectX::XMMatrixTranslation(7.0f, .0f, .0f) *
          DirectX::XMMatrixScaling(.25f, .25f, .25f) * temp;
 
@@ -829,9 +830,9 @@ void RR::Renderer::InternalUpdate() {
        DirectX::XMMATRIX world =
           DirectX::XMMatrixIdentity() *
           DirectX::XMMatrixTranslationFromVector(DirectX::XMLoadFloat3(&i->first->position)) *
-          DirectX::XMMatrixRotationX(DirectX::XMConvertToRadians(i->first->position.x)) *
-          DirectX::XMMatrixRotationY(DirectX::XMConvertToRadians(i->first->position.y)) *
-          DirectX::XMMatrixRotationZ(DirectX::XMConvertToRadians(i->first->position.z)) *
+          DirectX::XMMatrixRotationX(DirectX::XMConvertToRadians(i->first->rotation.x)) *
+          DirectX::XMMatrixRotationY(DirectX::XMConvertToRadians(i->first->rotation.y)) *
+          DirectX::XMMatrixRotationZ(DirectX::XMConvertToRadians(i->first->rotation.z)) *
           DirectX::XMMatrixScalingFromVector(DirectX::XMLoadFloat3(&i->first->scale));
 
        if (level != 0) {

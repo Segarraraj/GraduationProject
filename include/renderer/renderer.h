@@ -31,6 +31,7 @@ class Entity;
 class Renderer {
  public:
   float delta_time = 0.0f;
+  float elapsed_time = 0.0f;
 
   Renderer();
 
@@ -42,7 +43,7 @@ class Renderer {
 
   ~Renderer();
 
-  int Init(void (*update)());
+  int Init(void* user_data, void (*update)(void*));
   void Start();
   void Stop();
   void Resize();
@@ -57,7 +58,8 @@ class Renderer {
 
   uint16_t _current_frame = 0;
   bool _running = true;
-  void (*update_)() = nullptr;
+  void (*_update)(void* user_data) = nullptr;
+  void* _user_data = nullptr;
 
   ID3D12Device* _device = nullptr;
   IDXGISwapChain3* _swap_chain = nullptr;
@@ -84,6 +86,7 @@ class Renderer {
   ID3D12DebugDevice* _debug_device = nullptr;
  #endif
 
+  void InternalUpdate();
   void UpdatePipeline();
   void Render();
   void Cleanup();
