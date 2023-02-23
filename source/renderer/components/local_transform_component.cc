@@ -14,6 +14,8 @@ RR::LocalTransform::LocalTransform() {
 
 void RR::LocalTransform::SetParent(std::shared_ptr<Entity> parent) {
   if (parent == nullptr) {
+    level = 0;
+    parent = nullptr;
     return;
   }
 
@@ -28,6 +30,22 @@ void RR::LocalTransform::SetParent(std::shared_ptr<Entity> parent) {
   if (parent_transform == nullptr) {
     return;
   }
+
+  if (parent_transform.get() == this) {
+    return;
+  }
+
+  if (parent_transform->parent != nullptr) {
+    std::shared_ptr<LocalTransform> parent_parent_transform =
+        std::static_pointer_cast<LocalTransform, EntityComponent>(
+            parent_transform->parent
+                ->_components[kComponentType_LocalTransform]);
+
+    if (parent_parent_transform.get() == this) {
+      return;
+    }
+  }
+   
 
   level = parent_transform->level + 1;
   this->parent = parent;
