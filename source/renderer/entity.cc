@@ -13,6 +13,7 @@ RR::Entity::Entity(uint32_t components) {
 
     switch (i) {
       case RR::kComponentType_WorldTransform:
+        _components[i] = std::make_shared<WorldTransform>();
         break;
       case RR::kComponentType_LocalTransform:
         _components[i] = std::make_shared<LocalTransform>();
