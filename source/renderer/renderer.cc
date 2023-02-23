@@ -16,6 +16,8 @@
 #include "renderer/window.h"
 #include "renderer/logger.h"
 #include "renderer/entity.h"
+#include "renderer/components/local_transform_component.h"
+#include "renderer/components/world_transform_component.h"
 
 static long long CALLBACK WindowProc(void* window, unsigned int message,
                               unsigned long long wParam, long long lParam) {
@@ -692,6 +694,8 @@ void RR::Renderer::Start() {
     } while (delta_time < (1000.0f / 60.0f));
 
     frame_start = std::chrono::high_resolution_clock::now();
+    _current_frame = _swap_chain->GetCurrentBackBufferIndex();
+    time = std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - renderer_start).count();
 
     MSG message;
     while (PeekMessage(&message, (HWND)_window->window(), 0, 0, PM_REMOVE)) {
@@ -699,56 +703,10 @@ void RR::Renderer::Start() {
       DispatchMessage(&message);
     }
 
-    _current_frame = _swap_chain->GetCurrentBackBufferIndex();
-
     WaitForPreviousFrame();
     
     update_();
-
-    float elapsed_time = std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - renderer_start).count();
-    ConstantBufferStruct cube1 = {}, cube2 = {};
-
-    DirectX::XMMATRIX temp = DirectX::XMMatrixIdentity() *
-                             DirectX::XMMatrixRotationY(elapsed_time * 0.001f) * 
-                             DirectX::XMMatrixScaling(.5f, .5f, .5f);
-
-    temp = DirectX::XMMatrixTranspose(temp);
-    DirectX::XMStoreFloat4x4(&cube1.model, temp);
-
-    temp = DirectX::XMMatrixIdentity() *
-           DirectX::XMMatrixRotationZ(elapsed_time * 0.003f) *
-           DirectX::XMMatrixTranslation(7.0f, .0f, .0f) *
-           DirectX::XMMatrixScaling(.25f, .25f, .25f) * temp;
-
-    temp = DirectX::XMMatrixTranspose(temp);
-    DirectX::XMStoreFloat4x4(&cube2.model, temp);
-
-    temp = DirectX::XMMatrixLookAtLH(DirectX::XMVectorSet(0.0f, 2.0f, -4.0f, 0.0f),
-                                     DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f),
-                                     DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
-
-    temp = DirectX::XMMatrixTranspose(temp);
-    DirectX::XMStoreFloat4x4(&cube1.view, temp);
-    DirectX::XMStoreFloat4x4(&cube2.view, temp);
-
-    temp = DirectX::XMMatrixPerspectiveFovLH(
-        65.0f * (3.14f / 180.0f), _window->aspectRatio(), .01f, 10.0f);
-
-    temp = DirectX::XMMatrixTranspose(temp);
-    DirectX::XMStoreFloat4x4(&cube1.projection, temp);
-    DirectX::XMStoreFloat4x4(&cube2.projection, temp);
-
-    D3D12_RANGE range = {};
-    UINT* buffer_start = nullptr;
-
-    _constant_buffer_upload_heap[_current_frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
-    memcpy(buffer_start, &cube1, sizeof(ConstantBufferStruct));
-    _constant_buffer_upload_heap[_current_frame]->Unmap(0, nullptr);
-
-    _constant_buffer_upload_heap[_current_frame + kSwapchainBufferCount]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
-    memcpy(buffer_start, &cube2, sizeof(ConstantBufferStruct));
-    _constant_buffer_upload_heap[_current_frame + kSwapchainBufferCount]->Unmap(0, nullptr);
-
+    InternalUpdate();
     UpdatePipeline();
     Render();
   }
@@ -785,6 +743,109 @@ std::shared_ptr<RR::Entity> RR::Renderer::RegisterEntity(uint32_t component_type
   std::shared_ptr<Entity> new_entity = std::make_shared<Entity>(component_types);
   _entities.push_back(new_entity);
   return new_entity;
+}
+
+void RR::Renderer::InternalUpdate() {
+  ConstantBufferStruct cube1 = {}, cube2 = {};
+
+  DirectX::XMMATRIX temp = DirectX::XMMatrixIdentity() *
+                           DirectX::XMMatrixRotationY(time * 0.001f) *
+                           DirectX::XMMatrixScaling(.5f, .5f, .5f);
+
+  temp = DirectX::XMMatrixTranspose(temp);
+  DirectX::XMStoreFloat4x4(&cube1.model, temp);
+
+  temp = DirectX::XMMatrixIdentity() *
+         DirectX::XMMatrixRotationZ(time * 0.003f) *
+         DirectX::XMMatrixTranslation(7.0f, .0f, .0f) *
+         DirectX::XMMatrixScaling(.25f, .25f, .25f) * temp;
+
+  temp = DirectX::XMMatrixTranspose(temp);
+  DirectX::XMStoreFloat4x4(&cube2.model, temp);
+
+  temp =
+      DirectX::XMMatrixLookAtLH(DirectX::XMVectorSet(0.0f, 2.0f, -4.0f, 0.0f),
+                                DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f),
+                                DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+
+  temp = DirectX::XMMatrixTranspose(temp);
+  DirectX::XMStoreFloat4x4(&cube1.view, temp);
+  DirectX::XMStoreFloat4x4(&cube2.view, temp);
+
+  temp = DirectX::XMMatrixPerspectiveFovLH(65.0f * (3.14f / 180.0f),
+                                           _window->aspectRatio(), .01f, 10.0f);
+
+  temp = DirectX::XMMatrixTranspose(temp);
+  DirectX::XMStoreFloat4x4(&cube1.projection, temp);
+  DirectX::XMStoreFloat4x4(&cube2.projection, temp);
+
+  D3D12_RANGE range = {};
+  UINT* buffer_start = nullptr;
+
+  _constant_buffer_upload_heap[_current_frame]->Map(
+      0, nullptr, reinterpret_cast<void**>(&buffer_start));
+  memcpy(buffer_start, &cube1, sizeof(ConstantBufferStruct));
+  _constant_buffer_upload_heap[_current_frame]->Unmap(0, nullptr);
+
+  _constant_buffer_upload_heap[_current_frame + kSwapchainBufferCount]->Map(
+      0, nullptr, reinterpret_cast<void**>(&buffer_start));
+  memcpy(buffer_start, &cube2, sizeof(ConstantBufferStruct));
+  _constant_buffer_upload_heap[_current_frame + kSwapchainBufferCount]->Unmap(
+      0, nullptr);
+
+  std::map<uint32_t, std::list<std::pair<std::shared_ptr<LocalTransform>, std::shared_ptr<WorldTransform>>>> components;
+
+  uint32_t max_parent_level = 0;
+  for (uint32_t level = 0; level <= max_parent_level; level++) {
+    for (std::list<std::shared_ptr<Entity>>::iterator i = _entities.begin(); i != _entities.end(); i++) {
+      std::shared_ptr<LocalTransform> local_transform =
+          std::static_pointer_cast<LocalTransform>(
+              i->get()->GetComponent(kComponentType_LocalTransform));
+    
+      if (local_transform == nullptr) {
+        continue;
+      }
+
+      if (local_transform->level > max_parent_level) {
+        max_parent_level = local_transform->level;
+      }
+
+      std::shared_ptr<WorldTransform> world_transform =
+          std::static_pointer_cast<WorldTransform>(
+              i->get()->GetComponent(kComponentType_WorldTransform));
+
+      std::pair<std::shared_ptr<LocalTransform>, std::shared_ptr<WorldTransform>> pair;
+
+      pair.first = local_transform;
+      pair.second = world_transform;
+      components[local_transform->level].push_back(pair);
+    }
+  }
+
+  for (uint32_t level = 0; level <= max_parent_level; level++) {
+    for (std::list<std::pair<std::shared_ptr<LocalTransform>, std::shared_ptr<WorldTransform>>>::iterator i = components[level].begin();
+         i != components[level].end(); i++) {
+
+       DirectX::XMMATRIX world =
+          DirectX::XMMatrixIdentity() *
+          DirectX::XMMatrixTranslationFromVector(DirectX::XMLoadFloat3(&i->first->position)) *
+          DirectX::XMMatrixRotationX(DirectX::XMConvertToRadians(i->first->position.x)) *
+          DirectX::XMMatrixRotationY(DirectX::XMConvertToRadians(i->first->position.y)) *
+          DirectX::XMMatrixRotationZ(DirectX::XMConvertToRadians(i->first->position.z)) *
+          DirectX::XMMatrixScalingFromVector(DirectX::XMLoadFloat3(&i->first->scale));
+
+       if (level != 0) {
+         std::shared_ptr<WorldTransform> parent_world =
+             std::static_pointer_cast<WorldTransform>(
+                 i->first->parent->GetComponent(kComponentType_WorldTransform));
+
+         world = DirectX::XMLoadFloat4x4(&parent_world->world) * world;
+       }
+
+       DirectX::XMStoreFloat4x4(&i->second->world, world);
+    }
+  }
+
 }
 
 void RR::Renderer::UpdatePipeline() { 

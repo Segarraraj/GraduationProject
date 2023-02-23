@@ -21,6 +21,7 @@ class LocalTransform : public EntityComponent {
   DirectX::XMFLOAT3 rotation;
   DirectX::XMFLOAT3 scale;
 
+  friend class Renderer;
  private:
   uint32_t level;
   std::shared_ptr<Entity> parent;
