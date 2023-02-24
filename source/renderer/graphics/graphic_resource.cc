@@ -1,4 +1,4 @@
-#include "renderer/graphic_resource.h"
+#include "renderer/graphics/graphic_resource.h"
 
 bool RR::GraphicResource::Updated() const { return _updated; }
 

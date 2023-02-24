@@ -17,7 +17,7 @@
 #include "renderer/window.h"
 #include "renderer/logger.h"
 #include "renderer/entity.h"
-#include "renderer/geometry.h"
+#include "renderer/graphics/geometry.h"
 #include "renderer/components/camera_component.h"
 #include "renderer/components/local_transform_component.h"
 #include "renderer/components/world_transform_component.h"

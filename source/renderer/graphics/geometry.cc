@@ -10,14 +10,14 @@ uint32_t RR::Geometry::Indices() const { return _indices; }
 
 uint32_t RR::Geometry::Stride() const { 
   switch (_type) {
-    case RR::kGeometryType_None:
-      return 0;
-      break;
     case RR::kGeometryType_Positions_Normals:
       return sizeof(float) * 3 + sizeof(float) * 3;
       break;
     case RR::kGeometryType_Positions_Normals_UV:
       return sizeof(float) * 3 + sizeof(float) * 3 + sizeof(float) * 2;
+      break;
+    default:
+      return 0;
       break;
   }
 }
