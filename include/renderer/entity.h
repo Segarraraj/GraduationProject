@@ -16,7 +16,7 @@ class Entity {
   Entity(Entity&&) = delete;
   void operator=(Entity&&) = delete;
 
-  std::shared_ptr<EntityComponent> GetComponent(uint32_t component_type);
+  std::shared_ptr<EntityComponent> GetComponent(uint32_t component_type) const;
 
   ~Entity() = default;
 

@@ -27,6 +27,7 @@ struct ID3D12DebugDevice;
 namespace RR {
 class Window;
 class Entity;
+class Camera;
 
 class Renderer {
  public:
@@ -48,13 +49,18 @@ class Renderer {
   void Stop();
   void Resize();
 
+  std::shared_ptr<Entity> MainCamera();
   std::shared_ptr<Entity> RegisterEntity(uint32_t component_types);
 
  private:
   static const uint16_t kSwapchainBufferCount = 3;
 
   std::unique_ptr<RR::Window> _window;
+  // This is memory acces mayhem, 0 cache hits
+  // specially when accessing entity components,
+  // See: BadBay game engine ECS
   std::list<std::shared_ptr<Entity>> _entities;
+  std::shared_ptr<Entity> _main_camera;
 
   uint16_t _current_frame = 0;
   bool _running = true;

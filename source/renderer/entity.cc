@@ -2,6 +2,7 @@
 
 #include "renderer/common.hpp"
 #include "renderer/components/entity_component.h"
+#include "renderer/components/camera_component.h"
 #include "renderer/components/local_transform_component.h"
 #include "renderer/components/world_transform_component.h"
 
@@ -21,11 +22,13 @@ RR::Entity::Entity(uint32_t components) {
       case RR::kComponentType_Renderer:
         break;
       case RR::kComponentType_Camera:
+        _components[i] = std::make_shared<Camera>();
         break;
     }
   }
 }
 
-std::shared_ptr<RR::EntityComponent> RR::Entity::GetComponent(uint32_t component_type) {
-  return _components[component_type];
+std::shared_ptr<RR::EntityComponent> RR::Entity::GetComponent(uint32_t component_type) const {
+  return _components.count(component_type) != 0 
+    ? _components.at(component_type) : nullptr;
 }
