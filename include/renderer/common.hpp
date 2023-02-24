@@ -17,6 +17,20 @@ enum ComponentTypes : uint32_t {
   kComponentType_Renderer =       0b0100,
   kComponentType_Camera =         0b1000
 };
+
+enum GeometryTypes : uint32_t { 
+  kGeometryType_None                 = 0U,
+  kGeometryType_Positions_Normals    = 1U,
+  kGeometryType_Positions_Normals_UV = 2U,
+};
+
+struct GeometryData {
+  float* vertex_data;
+  uint32_t* index_data;
+  uint32_t vertex_size;
+  uint32_t index_size;
+};
+
 }
 
 #endif  // !__COMMON_H__

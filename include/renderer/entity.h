@@ -12,7 +12,7 @@ class Entity {
  public:
   Entity() = default;
   Entity(uint32_t components);
-
+  
   Entity(Entity&&) = delete;
   void operator=(Entity&&) = delete;
 

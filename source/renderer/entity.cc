@@ -13,15 +13,15 @@ RR::Entity::Entity(uint32_t components) {
     }
 
     switch (i) {
-      case RR::kComponentType_WorldTransform:
+      case ComponentTypes::kComponentType_WorldTransform:
         _components[i] = std::make_shared<WorldTransform>();
         break;
-      case RR::kComponentType_LocalTransform:
+      case ComponentTypes::kComponentType_LocalTransform:
         _components[i] = std::make_shared<LocalTransform>();
         break;
-      case RR::kComponentType_Renderer:
+      case ComponentTypes::kComponentType_Renderer:
         break;
-      case RR::kComponentType_Camera:
+      case ComponentTypes::kComponentType_Camera:
         _components[i] = std::make_shared<Camera>();
         break;
     }

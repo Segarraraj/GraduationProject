@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <Windows.h>
+#include <d3d12.h>
 #include <dxgi1_6.h>
 #include <d3d12sdklayers.h>
 #include <d3dcompiler.h>
@@ -16,6 +17,7 @@
 #include "renderer/window.h"
 #include "renderer/logger.h"
 #include "renderer/entity.h"
+#include "renderer/geometry.h"
 #include "renderer/components/camera_component.h"
 #include "renderer/components/local_transform_component.h"
 #include "renderer/components/world_transform_component.h"
@@ -61,7 +63,9 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
 
   _window->Show(); 
 
-  _main_camera = RegisterEntity(kComponentType_Camera);
+  _main_camera = RegisterEntity((uint32_t)ComponentTypes::kComponentType_Camera);
+
+  _geometries = std::vector<Geometry>(20);
 
   HRESULT result;
 
@@ -398,201 +402,6 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
     return 1;
   }
 
-  // Create vertex buffer
-  DirectX::XMFLOAT3 vertex_list[] = {
-      // front face
-      {-1.0f,  1.0f, -1.0f}, {1.0f, 0.0f, 0.0f},
-      { 1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 1.0f},
-      {-1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, 1.0f},
-      { 1.0f,  1.0f, -1.0f}, {0.0f, 1.0f, 0.0f},
-
-      // right side face
-      {1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 0.0f},
-      {1.0f,  1.0f,  1.0f}, {1.0f, 0.0f, 1.0f},
-      {1.0f, -1.0f,  1.0f}, {0.0f, 0.0f, 1.0f},
-      {1.0f,  1.0f, -1.0f}, {0.0f, 1.0f, 0.0f},
-
-      // left side face
-      {-1.0f,  1.0f,  1.0f}, {1.0f, 0.0f, 0.0f},
-      {-1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 1.0f},
-      {-1.0f, -1.0f,  1.0f}, {0.0f, 0.0f, 1.0f},
-      {-1.0f,  1.0f, -1.0f}, {0.0f, 1.0f, 0.0f},
-
-      // back face
-      { 1.0f,  1.0f, 1.0f}, {1.0f, 0.0f, 0.0f},
-      {-1.0f, -1.0f, 1.0f}, {1.0f, 0.0f, 1.0f},
-      { 1.0f, -1.0f, 1.0f}, {0.0f, 0.0f, 1.0f},
-      {-1.0f,  1.0f, 1.0f}, {0.0f, 1.0f, 0.0f},
-
-      // top face
-      {-1.0f, 1.0f, -1.0f}, {1.0f, 0.0f, 0.0f},
-      { 1.0f, 1.0f,  1.0f}, {1.0f, 0.0f, 1.0f},
-      { 1.0f, 1.0f, -1.0f}, {0.0f, 0.0f, 1.0f},
-      {-1.0f, 1.0f,  1.0f}, {0.0f, 1.0f, 0.0f},
-
-      // bottom face
-      { 1.0f, -1.0f,  1.0f}, {1.0f, 0.0f, 0.0f},
-      {-1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 1.0f},
-      { 1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, 1.0f},
-      {-1.0f, -1.0f,  1.0f}, {0.0f, 1.0f, 0.0f},
-  };
-
-   UINT indices[] = {
-      // ffront face
-      0, 1, 2,  // first triangle
-      0, 3, 1,  // second triangle
-
-      // left face
-      4, 5, 6,  // first triangle
-      4, 7, 5,  // second triangle
-
-      // right face
-      8, 9, 10,  // first triangle
-      8, 11, 9,  // second triangle
-
-      // back face
-      12, 13, 14,  // first triangle
-      12, 15, 13,  // second triangle
-
-      // top face
-      16, 17, 18,  // first triangle
-      16, 19, 17,  // second triangle
-
-      // bottom face
-      20, 21, 22,  // first triangle
-      20, 23, 21,  // second triangle
-   };
-
-  D3D12_HEAP_PROPERTIES default_heap_properties = {};
-  default_heap_properties.Type = D3D12_HEAP_TYPE_DEFAULT;
-  default_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-  default_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-
-  D3D12_RESOURCE_DESC vertex_resource_desc = {};
-  vertex_resource_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-  vertex_resource_desc.Alignment = 0;
-  vertex_resource_desc.Width = sizeof(vertex_list);
-  vertex_resource_desc.Height = 1;
-  vertex_resource_desc.DepthOrArraySize = 1;
-  vertex_resource_desc.MipLevels = 1;
-  vertex_resource_desc.Format = DXGI_FORMAT_UNKNOWN;
-  vertex_resource_desc.SampleDesc.Count = 1;
-  vertex_resource_desc.SampleDesc.Quality = 0;
-  vertex_resource_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-  vertex_resource_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-   
-  result = _device->CreateCommittedResource(
-      &default_heap_properties, D3D12_HEAP_FLAG_NONE, 
-      &vertex_resource_desc, D3D12_RESOURCE_STATE_COMMON, 
-      nullptr, IID_PPV_ARGS(&_vertex_default_buffer));
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't create vertex buffer default resource heap");
-    return 1;
-  }
-
-  ID3D12Resource* vertex_buffer_upload_heap = nullptr;
-  D3D12_HEAP_PROPERTIES upload_heap_properties = {};
-  upload_heap_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
-  upload_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-  upload_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-
-  result = _device->CreateCommittedResource(
-      &upload_heap_properties, D3D12_HEAP_FLAG_NONE,
-      &vertex_resource_desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-      IID_PPV_ARGS(&vertex_buffer_upload_heap));
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't create vertex buffer upload resource heap");
-    return 1;
-  }
-
-  vertex_resource_desc.Width = sizeof(indices);
-  result = _device->CreateCommittedResource(
-      &default_heap_properties, D3D12_HEAP_FLAG_NONE, &vertex_resource_desc,
-      D3D12_RESOURCE_STATE_COMMON, nullptr,
-      IID_PPV_ARGS(&_index_default_buffer));
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't create index buffer default resource heap");
-    return 1;
-  }
-
-  ID3D12Resource* index_buffer_upload_heap = nullptr;
-  result = _device->CreateCommittedResource(
-      &upload_heap_properties, D3D12_HEAP_FLAG_NONE, &vertex_resource_desc,
-      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-      IID_PPV_ARGS(&index_buffer_upload_heap));
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't create index buffer upload resource heap");
-    return 1;
-  }
-
-#ifdef DEBUG
-  index_buffer_upload_heap->SetName(L"index upload heap");
-  _index_default_buffer->SetName(L"index_default_heap");
-  vertex_buffer_upload_heap->SetName(L"vertex upload heap");
-  _vertex_default_buffer->SetName(L"vertex default heap");
-#endif  // DEBUG
-
-
-  UINT8* upload_resource_heap_begin;
-  D3D12_RANGE read_range;
-  read_range.Begin = 0;
-  read_range.End = 0;
-
-  // Copy data to upload resource heap
-  vertex_buffer_upload_heap->Map(0, &read_range,
-      reinterpret_cast<void**>(&upload_resource_heap_begin));
-  memcpy(upload_resource_heap_begin, vertex_list, sizeof(vertex_list));
-  vertex_buffer_upload_heap->Unmap(0, nullptr);
-
-  index_buffer_upload_heap->Map(0, &read_range, 
-      reinterpret_cast<void**>(&upload_resource_heap_begin));
-  memcpy(upload_resource_heap_begin, indices, sizeof(indices));
-  index_buffer_upload_heap->Unmap(0, nullptr);
-
-  D3D12_RESOURCE_BARRIER vb_upload_resource_heap_barrier = {};
-  vb_upload_resource_heap_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-  vb_upload_resource_heap_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-  vb_upload_resource_heap_barrier.Transition.pResource = _vertex_default_buffer;
-  vb_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
-  vb_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-  vb_upload_resource_heap_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-  
-  D3D12_RESOURCE_BARRIER index_upload_resource_heap_barrier = {};
-  index_upload_resource_heap_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-  index_upload_resource_heap_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-  index_upload_resource_heap_barrier.Transition.pResource = _index_default_buffer;
-  index_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
-  index_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-  index_upload_resource_heap_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
-  _fences[_current_frame]->Signal(0);
-  _command_list->Reset(_command_allocators[_current_frame], NULL);
-  _command_list->ResourceBarrier(1, &vb_upload_resource_heap_barrier);
-  _command_list->ResourceBarrier(1, &index_upload_resource_heap_barrier);
-  _command_list->CopyResource(_vertex_default_buffer, vertex_buffer_upload_heap);
-  _command_list->CopyResource(_index_default_buffer, index_buffer_upload_heap);
-  vb_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-  vb_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-  index_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-  index_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_INDEX_BUFFER;
-  _command_list->ResourceBarrier(1, &vb_upload_resource_heap_barrier);
-  _command_list->ResourceBarrier(1, &index_upload_resource_heap_barrier);
-  result = _command_list->Close();
-
-  ID3D12CommandList* command_lists[] = {_command_list};
-  _command_queue->ExecuteCommandLists(sizeof(command_lists) / sizeof(ID3D12CommandList), command_lists);
-  _command_queue->Signal(_fences[_current_frame], 1);
-
-  _vertex_buffer_view = std::make_unique<D3D12_VERTEX_BUFFER_VIEW>();
-  _vertex_buffer_view->BufferLocation = _vertex_default_buffer->GetGPUVirtualAddress();
-  _vertex_buffer_view->StrideInBytes = sizeof(DirectX::XMFLOAT3) * 2;
-  _vertex_buffer_view->SizeInBytes = sizeof(vertex_list);
-
-  _index_buffer_view = std::make_unique<D3D12_INDEX_BUFFER_VIEW>();
-  _index_buffer_view->BufferLocation = _index_default_buffer->GetGPUVirtualAddress();
-  _index_buffer_view->Format = DXGI_FORMAT_R32_UINT;
-  _index_buffer_view->SizeInBytes = sizeof(indices);
-
   LOG_DEBUG("RR", "Creating depth stencil buffer");
   // Create depth stencil descriptor heap
   D3D12_DESCRIPTOR_HEAP_DESC depth_stencil_descriptor_heap_desc = {};
@@ -606,6 +415,11 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
     LOG_ERROR("RR", "Couldn't create depth stencil descriptor heap");
     return 1;
   }
+
+  D3D12_HEAP_PROPERTIES default_heap_properties = {};
+  default_heap_properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+  default_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  default_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 
   D3D12_DEPTH_STENCIL_VIEW_DESC depth_stencil_desc = {};
   depth_stencil_desc.Format = DXGI_FORMAT_D32_FLOAT;
@@ -684,6 +498,7 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
 
   printf("\n");
   LOG_DEBUG("RR", "Renderer initialized");
+  LOG_DEBUG("RR", "    Available geometries: %i", _geometries.size());
   return 0;
 }
 
@@ -706,6 +521,8 @@ void RR::Renderer::Start() {
       TranslateMessage(&message);
       DispatchMessage(&message);
     }
+
+    UpdateGraphicResources();
 
     WaitForPreviousFrame();
     
@@ -740,7 +557,7 @@ void RR::Renderer::Resize() {
                               _window->height(), DXGI_FORMAT_UNKNOWN, 0);
 }
 
-std::shared_ptr<RR::Entity> RR::Renderer::MainCamera() {
+std::shared_ptr<RR::Entity> RR::Renderer::MainCamera() const {
   return _main_camera;
 }
 
@@ -754,15 +571,64 @@ std::shared_ptr<RR::Entity> RR::Renderer::RegisterEntity(
   return new_entity;
 }
 
+int32_t RR::Renderer::CreateGeometry(uint32_t geometry_type,
+                                     std::shared_ptr<GeometryData> data) {
+
+  for (size_t i = 0; i < _geometries.size(); i++) {
+    if (_geometries[i].Initialized()) {
+      continue;
+    }
+
+    _geometries[i].Init(_device, geometry_type, data);
+    return i;
+  }
+
+  return -1;
+}
+
+void RR::Renderer::UpdateGraphicResources() { 
+  size_t i = 0;
+  bool update = false;
+  for (; i < _geometries.size() && !update; i++) {
+    if (!_geometries[i].Updated() && _geometries[i].Initialized()) {
+      update = true;
+    }
+  }
+
+  if (!update) {
+    return;
+  }
+
+  WaitForAllFrames();
+
+  _command_allocators[_current_frame]->Reset();
+  _command_list->Reset(_command_allocators[_current_frame], nullptr);
+
+  for (i = i - 1; i < _geometries.size(); i++) {
+    if (!_geometries[i].Updated() && _geometries[i].Initialized()) {
+      _geometries[i].Update(_command_list);
+    }
+  }
+
+  _command_list->Close();
+
+  ID3D12CommandList* lists[] = {_command_list};
+
+  _fences[_current_frame]->Signal(0);
+  _command_queue->ExecuteCommandLists(1, lists);
+  _command_queue->Signal(_fences[_current_frame], 1);
+}
+
 void RR::Renderer::InternalUpdate() {
   std::map<uint32_t, std::list<std::pair<std::shared_ptr<LocalTransform>, std::shared_ptr<WorldTransform>>>> components;
 
+  // Prepare parent and child components
   uint32_t max_parent_level = 0;
   for (uint32_t level = 0; level <= max_parent_level; level++) {
     for (std::list<std::shared_ptr<Entity>>::iterator i = _entities.begin(); i != _entities.end(); i++) {
       std::shared_ptr<LocalTransform> local_transform =
           std::static_pointer_cast<LocalTransform>(
-              i->get()->GetComponent(kComponentType_LocalTransform));
+              i->get()->GetComponent(ComponentTypes::kComponentType_LocalTransform));
     
       if (local_transform == nullptr) {
         continue;
@@ -774,7 +640,7 @@ void RR::Renderer::InternalUpdate() {
 
       std::shared_ptr<WorldTransform> world_transform =
           std::static_pointer_cast<WorldTransform>(
-              i->get()->GetComponent(kComponentType_WorldTransform));
+              i->get()->GetComponent(ComponentTypes::kComponentType_WorldTransform));
 
       std::pair<std::shared_ptr<LocalTransform>, std::shared_ptr<WorldTransform>> pair;
 
@@ -784,6 +650,7 @@ void RR::Renderer::InternalUpdate() {
     }
   }
 
+  // Calculate world positions
   for (uint32_t level = 0; level <= max_parent_level; level++) {
     for (std::list<std::pair<std::shared_ptr<LocalTransform>, std::shared_ptr<WorldTransform>>>::iterator i = components[level].begin();
          i != components[level].end(); i++) {
@@ -799,7 +666,8 @@ void RR::Renderer::InternalUpdate() {
        if (level != 0) {
          std::shared_ptr<WorldTransform> parent_world =
              std::static_pointer_cast<WorldTransform>(
-                 i->first->parent->GetComponent(kComponentType_WorldTransform));
+                 i->first->parent->GetComponent(
+                     ComponentTypes::kComponentType_WorldTransform));
 
          world = DirectX::XMLoadFloat4x4(&parent_world->world) * world;
        }
@@ -807,6 +675,8 @@ void RR::Renderer::InternalUpdate() {
        DirectX::XMStoreFloat4x4(&i->second->world, world);
     }
   }
+
+  // Prepare projection and view matrix
 
   ConstantBufferStruct cube1 = {}, cube2 = {};
 
@@ -826,12 +696,12 @@ void RR::Renderer::InternalUpdate() {
   DirectX::XMStoreFloat4x4(&cube2.model, temp);
 
   std::shared_ptr<WorldTransform> camera_world =
-      std::static_pointer_cast<WorldTransform>(
-          _main_camera->GetComponent(kComponentType_WorldTransform));
+      std::static_pointer_cast<WorldTransform>(_main_camera->GetComponent(
+          ComponentTypes::kComponentType_WorldTransform));
 
   std::shared_ptr<Camera> camera =
       std::static_pointer_cast<Camera>(
-          _main_camera->GetComponent(kComponentType_Camera));
+      _main_camera->GetComponent(ComponentTypes::kComponentType_Camera));
 
   DirectX::XMVECTOR right =
       DirectX::XMVectorSet(camera_world->world._11, camera_world->world._12,
@@ -937,9 +807,11 @@ void RR::Renderer::UpdatePipeline() {
   _command_list->SetGraphicsRootSignature(_root_signature);
   _command_list->RSSetViewports(1, &viewport);
   _command_list->RSSetScissorRects(1, &scissor_rect);
-  _command_list->IASetVertexBuffers(0, 1, _vertex_buffer_view.get());
   _command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  _command_list->IASetIndexBuffer(_index_buffer_view.get());
+
+  // TODO: temporal
+  _command_list->IASetVertexBuffers(0, 1, _geometries[0].VertexView());
+  _command_list->IASetIndexBuffer(_geometries[0].IndexView());
   _command_list->SetGraphicsRootConstantBufferView(0, constant_buffer_start);
   _command_list->DrawIndexedInstanced(36, 1, 0, 0, 0);
   constant_buffer_start =
@@ -968,6 +840,7 @@ void RR::Renderer::Render() {
 
   ID3D12CommandList* command_lists[] = {_command_list};
 
+  _fences[_current_frame]->Signal(0);
   _command_queue->ExecuteCommandLists(sizeof(command_lists) / sizeof(ID3D12CommandList), command_lists);
   _command_queue->Signal(_fences[_current_frame], 1);
   _swap_chain->Present(0, 0);
@@ -1013,16 +886,6 @@ void RR::Renderer::Cleanup() {
     _root_signature = nullptr;
   }
 
-  if (_vertex_default_buffer != nullptr) {
-    _vertex_default_buffer->Release();
-    _vertex_default_buffer = nullptr;
-  }
-
-  if (_index_default_buffer != nullptr) {
-    _index_default_buffer->Release();
-    _index_default_buffer = nullptr;
-  }
-
   if (_depth_scentil_buffer != nullptr) {
     _depth_scentil_buffer->Release();
     _depth_scentil_buffer = nullptr;
@@ -1031,7 +894,11 @@ void RR::Renderer::Cleanup() {
   if (_depth_stencil_descriptor_heap != nullptr) {
     _depth_stencil_descriptor_heap->Release();
     _depth_stencil_descriptor_heap = nullptr;
-  }  
+  }
+
+  for (size_t i = 0; i < _geometries.size(); i++) {
+    _geometries[i].Release();
+  }
 
   for (uint16_t i = 0; i < kSwapchainBufferCount; ++i) {
     if (_command_allocators[i] != nullptr) {
@@ -1061,6 +928,12 @@ void RR::Renderer::WaitForPreviousFrame() {
     _fences[_current_frame]->SetEventOnCompletion(1, _fence_event);
     WaitForSingleObject(_fence_event, INFINITE);
   }
+}
 
-  _fences[_current_frame]->Signal(0);
+void RR::Renderer::WaitForAllFrames() { 
+  uint16_t old_frame = _current_frame;
+  for (_current_frame = 0; _current_frame < kSwapchainBufferCount; _current_frame++) {
+    WaitForPreviousFrame();
+  }
+  _current_frame = old_frame;
 }

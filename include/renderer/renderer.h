@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <list>
+#include <vector>
 
 struct ID3D12Device;
 struct IDXGISwapChain3;
@@ -28,6 +29,8 @@ namespace RR {
 class Window;
 class Entity;
 class Camera;
+class Geometry;
+struct GeometryData;
 
 class Renderer {
  public:
@@ -49,18 +52,23 @@ class Renderer {
   void Stop();
   void Resize();
 
-  std::shared_ptr<Entity> MainCamera();
+  std::shared_ptr<Entity> MainCamera() const;
   std::shared_ptr<Entity> RegisterEntity(uint32_t component_types);
+  int32_t CreateGeometry(uint32_t geometry_type, 
+                         std::shared_ptr<GeometryData> data);
 
  private:
   static const uint16_t kSwapchainBufferCount = 3;
 
   std::unique_ptr<RR::Window> _window;
+  std::shared_ptr<Entity> _main_camera;
+
+  std::vector<Geometry> _geometries;
+
   // This is memory acces mayhem, 0 cache hits
   // specially when accessing entity components,
   // See: BadBay game engine ECS
   std::list<std::shared_ptr<Entity>> _entities;
-  std::shared_ptr<Entity> _main_camera;
 
   uint16_t _current_frame = 0;
   bool _running = true;
@@ -79,10 +87,7 @@ class Renderer {
 
   ID3D12PipelineState* _pipeline_state = nullptr;
   ID3D12RootSignature* _root_signature = nullptr;
-  ID3D12Resource* _vertex_default_buffer = nullptr;
-  std::unique_ptr<D3D12_VERTEX_BUFFER_VIEW> _vertex_buffer_view;
-  ID3D12Resource* _index_default_buffer = nullptr;
-  std::unique_ptr<D3D12_INDEX_BUFFER_VIEW> _index_buffer_view;
+  
   ID3D12Resource* _depth_scentil_buffer = nullptr;
   ID3D12DescriptorHeap* _depth_stencil_descriptor_heap = nullptr;
   ID3D12Resource* _constant_buffer_upload_heap[kSwapchainBufferCount * 2];
@@ -92,11 +97,13 @@ class Renderer {
   ID3D12DebugDevice* _debug_device = nullptr;
  #endif
 
+  void UpdateGraphicResources();
   void InternalUpdate();
   void UpdatePipeline();
   void Render();
   void Cleanup();
   void WaitForPreviousFrame();
+  void WaitForAllFrames();
 };
 }
 

@@ -46,6 +46,80 @@ int main(int argc, char** argv) {
   transform->position = {.0f, 1.5f, -6.0f};
   transform->rotation = {15.0f, 180.0f, .0f};
 
+  // Create vertex buffer
+  float vertex_list[] = {
+      // front face
+      -1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
+      1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 1.0f,
+      -1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f,
+      1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+
+      // right side face
+      1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
+      1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+      1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+      1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+
+      // left side face
+      -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+      -1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 1.0f,
+      -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+      -1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+
+      // back face
+      1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+      -1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+      1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+      -1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+
+      // top face
+      -1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
+      1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+      1.0f, 1.0f, -1.0f, 0.0f, 0.0f, 1.0f,
+      -1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+
+      // bottom face
+      1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+      -1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 1.0f,
+      1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f,
+      -1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+  };
+
+  uint32_t indices[] = {
+      // ffront face
+      0, 1, 2,  // first triangle
+      0, 3, 1,  // second triangle
+
+      // left face
+      4, 5, 6,  // first triangle
+      4, 7, 5,  // second triangle
+
+      // right face
+      8, 9, 10,  // first triangle
+      8, 11, 9,  // second triangle
+
+      // back face
+      12, 13, 14,  // first triangle
+      12, 15, 13,  // second triangle
+
+      // top face
+      16, 17, 18,  // first triangle
+      16, 19, 17,  // second triangle
+
+      // bottom face
+      20, 21, 22,  // first triangle
+      20, 23, 21,  // second triangle
+  };
+
+  std::shared_ptr<RR::GeometryData> gdata = std::make_shared<RR::GeometryData>();
+  gdata->vertex_data = vertex_list; 
+  gdata->index_data = indices;
+  gdata->vertex_size = sizeof(vertex_list);
+  gdata->index_size = sizeof(indices);
+
+  renderer.CreateGeometry(RR::GeometryTypes::kGeometryType_Positions_Normals,
+                          gdata);
+
   renderer.Start();
 
   return 0;
