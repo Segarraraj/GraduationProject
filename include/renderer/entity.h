@@ -9,10 +9,10 @@ class EntityComponent;
 class Renderer;
 
 class Entity {
- public:
+ public:  
   Entity() = default;
   Entity(uint32_t components);
-  
+
   Entity(Entity&&) = delete;
   void operator=(Entity&&) = delete;
 

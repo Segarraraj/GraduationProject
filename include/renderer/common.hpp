@@ -4,12 +4,6 @@
 #include <DirectXMath.h>
 
 namespace RR {
-struct ConstantBufferStruct {
-  DirectX::XMFLOAT4X4 model;
-  DirectX::XMFLOAT4X4 view;
-  DirectX::XMFLOAT4X4 projection;
-};
-
 enum ComponentTypes : uint32_t {
   kComponentType_None =           0b0000,
   kComponentType_WorldTransform = 0b0001,

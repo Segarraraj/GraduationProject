@@ -42,8 +42,6 @@ int RR::GFX::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::s
     return 1;
   }
 
-  LOG_DEBUG("RR::GFX", "Initializing geometry, type: [%i]", geometry_type);
-
   HRESULT result = {};
 
   D3D12_HEAP_PROPERTIES default_heap_properties = {};

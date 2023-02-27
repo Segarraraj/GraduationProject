@@ -20,6 +20,7 @@
 #include "renderer/components/camera_component.h"
 #include "renderer/components/local_transform_component.h"
 #include "renderer/components/world_transform_component.h"
+#include "renderer/components/renderer_component.h"
 
 static long long CALLBACK WindowProc(void* window, unsigned int message,
                               unsigned long long wParam, long long lParam) {
@@ -293,40 +294,6 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   _device->CreateDepthStencilView(
       _depth_scentil_buffer, &depth_stencil_desc,
       _depth_stencil_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
-  
-  // Create constant buffers
-  D3D12_HEAP_PROPERTIES constant_buffer_properties = {};
-  constant_buffer_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
-  constant_buffer_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-  constant_buffer_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-
-  D3D12_RESOURCE_DESC constant_buffer_desc = {};
-  constant_buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-  constant_buffer_desc.Alignment = 0;
-  constant_buffer_desc.Width = (sizeof(ConstantBufferStruct) + 255) & ~255;
-  constant_buffer_desc.Height = 1;
-  constant_buffer_desc.DepthOrArraySize = 1;
-  constant_buffer_desc.MipLevels = 1;
-  constant_buffer_desc.Format = DXGI_FORMAT_UNKNOWN;
-  constant_buffer_desc.SampleDesc.Count = 1;
-  constant_buffer_desc.SampleDesc.Quality = 0;
-  constant_buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-  constant_buffer_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-  // Create constant buffer
-  for (uint16_t i = 0; i < kSwapchainBufferCount * 2; ++i) {
-    result = _device->CreateCommittedResource(
-        &constant_buffer_properties, D3D12_HEAP_FLAG_NONE, 
-        &constant_buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, 
-        nullptr, IID_PPV_ARGS(&_constant_buffer_upload_heap[i]));
-
-    if (FAILED(result)) {
-      LOG_ERROR("RR", "Couldn't create constant buffer[%i]", i);
-      return 1;
-    }
-    
-    _constant_buffer_upload_heap[i]->SetName(L"Constant buffer upload heap");
-  }
 
   printf("\n");
   LOG_DEBUG("RR", "Initializing pipelines");
@@ -512,71 +479,6 @@ void RR::Renderer::InternalUpdate() {
        DirectX::XMStoreFloat4x4(&i->second->world, world);
     }
   }
-
-  // Prepare projection and view matrix
-
-  ConstantBufferStruct cube1 = {}, cube2 = {};
-
-  DirectX::XMMATRIX temp = DirectX::XMMatrixIdentity() *
-                           DirectX::XMMatrixRotationY(elapsed_time * 0.001f) *
-                           DirectX::XMMatrixScaling(.5f, .5f, .5f);
-
-  temp = DirectX::XMMatrixTranspose(temp);
-  DirectX::XMStoreFloat4x4(&cube1.model, temp);
-
-  temp = DirectX::XMMatrixIdentity() *
-         DirectX::XMMatrixRotationZ(elapsed_time * 0.003f) *
-         DirectX::XMMatrixTranslation(7.0f, .0f, .0f) *
-         DirectX::XMMatrixScaling(.25f, .25f, .25f) * temp;
-
-  temp = DirectX::XMMatrixTranspose(temp);
-  DirectX::XMStoreFloat4x4(&cube2.model, temp);
-
-  std::shared_ptr<WorldTransform> camera_world =
-      std::static_pointer_cast<WorldTransform>(_main_camera->GetComponent(
-          ComponentTypes::kComponentType_WorldTransform));
-
-  std::shared_ptr<Camera> camera =
-      std::static_pointer_cast<Camera>(
-      _main_camera->GetComponent(ComponentTypes::kComponentType_Camera));
-
-  DirectX::XMVECTOR right =
-      DirectX::XMVectorSet(camera_world->world._11, camera_world->world._12,
-                           camera_world->world._13, 0.0f);
-
-  temp = DirectX::XMMatrixLookToLH(
-      DirectX::XMVectorSet(camera_world->world._41, camera_world->world._42,
-                           camera_world->world._43, 0.0f),
-      DirectX::XMVectorSet(camera_world->world._31, camera_world->world._32,
-                           camera_world->world._33, 0.0f),
-      DirectX::XMVectorSet(camera_world->world._21, camera_world->world._22,
-                           camera_world->world._23, 0.0f));
-
-  temp = DirectX::XMMatrixTranspose(temp);
-  DirectX::XMStoreFloat4x4(&cube1.view, temp);
-  DirectX::XMStoreFloat4x4(&cube2.view, temp);
-
-  temp = DirectX::XMMatrixPerspectiveFovLH(camera->fov * (3.14f / 180.0f),
-                                           _window->aspectRatio(),
-                                           camera->nearZ, camera->farZ);
-
-  temp = DirectX::XMMatrixTranspose(temp);
-  DirectX::XMStoreFloat4x4(&cube1.projection, temp);
-  DirectX::XMStoreFloat4x4(&cube2.projection, temp);
-  
-  D3D12_RANGE range = {};
-  UINT* buffer_start = nullptr;
-
-  _constant_buffer_upload_heap[_current_frame]->Map(
-      0, nullptr, reinterpret_cast<void**>(&buffer_start));
-  memcpy(buffer_start, &cube1, sizeof(ConstantBufferStruct));
-  _constant_buffer_upload_heap[_current_frame]->Unmap(0, nullptr);
-
-  _constant_buffer_upload_heap[_current_frame + kSwapchainBufferCount]->Map(
-      0, nullptr, reinterpret_cast<void**>(&buffer_start));
-  memcpy(buffer_start, &cube2, sizeof(ConstantBufferStruct));
-  _constant_buffer_upload_heap[_current_frame + kSwapchainBufferCount]->Unmap(
-      0, nullptr);
 }
 
 void RR::Renderer::UpdatePipeline() { 
@@ -590,6 +492,62 @@ void RR::Renderer::UpdatePipeline() {
   if (FAILED(result)) {
     _running = false;
     return;
+  }
+
+  std::shared_ptr<WorldTransform> camera_world =
+      std::static_pointer_cast<WorldTransform>(_main_camera->GetComponent(
+          ComponentTypes::kComponentType_WorldTransform));
+
+  std::shared_ptr<Camera> camera = std::static_pointer_cast<Camera>(
+      _main_camera->GetComponent(ComponentTypes::kComponentType_Camera));
+
+  DirectX::XMMATRIX view = DirectX::XMMatrixLookToLH(
+      DirectX::XMVectorSet(camera_world->world._41, camera_world->world._42,
+                           camera_world->world._43, 0.0f),
+      DirectX::XMVectorSet(camera_world->world._31, camera_world->world._32,
+                           camera_world->world._33, 0.0f),
+      DirectX::XMVectorSet(camera_world->world._21, camera_world->world._22,
+                           camera_world->world._23, 0.0f));
+
+  DirectX::XMMATRIX projection = DirectX::XMMatrixPerspectiveFovLH(
+      camera->fov * (3.14f / 180.0f), _window->aspectRatio(), camera->nearZ,
+      camera->farZ);
+
+  std::map<uint32_t, std::list<std::shared_ptr<RendererComponent>>> render_list;
+  for (std::list<std::shared_ptr<Entity>>::iterator i = _entities.begin();
+       i != _entities.end(); i++) {
+    std::shared_ptr<RendererComponent> renderer =
+        std::static_pointer_cast<RendererComponent>(
+            i->get()->GetComponent(ComponentTypes::kComponentType_Renderer));
+
+    std::shared_ptr<WorldTransform> world_transform =
+        std::static_pointer_cast<WorldTransform>(i->get()->GetComponent(
+            ComponentTypes::kComponentType_WorldTransform));
+
+    if (renderer == nullptr || world_transform == nullptr) {
+      continue;
+    }
+
+    if (!renderer->_initialized) {
+      continue;
+    }
+
+    RendererSettings settings = {};
+    switch (renderer->_pipeline_type) {
+      case RR::PipelineTypes::kPipelineType_PBR:
+        DirectX::XMStoreFloat4x4(&settings.pbr_settings.mvp.view,
+                                 DirectX::XMMatrixTranspose(view));
+        DirectX::XMStoreFloat4x4(&settings.pbr_settings.mvp.projection,
+                                 DirectX::XMMatrixTranspose(projection));
+        DirectX::XMStoreFloat4x4(
+            &settings.pbr_settings.mvp.model,
+            DirectX::XMMatrixTranspose(
+                DirectX::XMLoadFloat4x4(&world_transform->world)));
+        renderer->Update(settings, _current_frame);
+        break;
+    }
+
+    render_list[renderer->_pipeline_type].push_back(renderer);
   }
 
   D3D12_RESOURCE_BARRIER rt_render_barrier = {};
@@ -616,9 +574,8 @@ void RR::Renderer::UpdatePipeline() {
       &rt_descriptor_handle, FALSE, 
       &depth_descriptor_handle);
 
-  const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
   _command_list->ClearRenderTargetView(
-      rt_descriptor_handle, clearColor, 0, nullptr);
+      rt_descriptor_handle, camera->clear_color, 0, nullptr);
 
   _command_list->ClearDepthStencilView(
       depth_descriptor_handle, D3D12_CLEAR_FLAG_DEPTH, 
@@ -638,24 +595,32 @@ void RR::Renderer::UpdatePipeline() {
   scissor_rect.right = _window->width();
   scissor_rect.bottom = _window->height();
 
-  D3D12_GPU_VIRTUAL_ADDRESS constant_buffer_start =
-      _constant_buffer_upload_heap[_current_frame]->GetGPUVirtualAddress();
-
-  _command_list->SetPipelineState(_pipelines[RR::PipelineTypes::kPipelineType_PBR].PipelineState());
-  _command_list->SetGraphicsRootSignature(_pipelines[RR::PipelineTypes::kPipelineType_PBR].RootSignature());
+  _command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   _command_list->RSSetViewports(1, &viewport);
   _command_list->RSSetScissorRects(1, &scissor_rect);
-  _command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-  // TODO: temporal
-  _command_list->IASetVertexBuffers(0, 1, _geometries[0].VertexView());
-  _command_list->IASetIndexBuffer(_geometries[0].IndexView());
-  _command_list->SetGraphicsRootConstantBufferView(0, constant_buffer_start);
-  _command_list->DrawIndexedInstanced(36, 1, 0, 0, 0);
-  constant_buffer_start =
-      _constant_buffer_upload_heap[_current_frame + kSwapchainBufferCount]->GetGPUVirtualAddress();
-  _command_list->SetGraphicsRootConstantBufferView(0, constant_buffer_start);
-  _command_list->DrawIndexedInstanced(36, 1, 0, 0, 0);
+  // CHANGE PipelineTypes values to change sorting and render order
+  for (std::map<uint32_t, std::list<std::shared_ptr<RendererComponent>>>::iterator i = render_list.begin();
+       i != render_list.end(); i++) {
+    GFX::Pipeline pipeline = _pipelines[i->first];
+    _command_list->SetPipelineState(pipeline.PipelineState());
+    _command_list->SetGraphicsRootSignature(pipeline.RootSignature());
+    
+    for (std::list<std::shared_ptr<RendererComponent>>::iterator j = i->second.begin();
+         j != i->second.end(); j++) {
+
+
+      if (pipeline.GeometryType() != _geometries[j->get()->geometry].Type()) {
+        LOG_WARNING("RR", "Traying to draw geometry with incompatible pipeline");
+        continue;
+      }
+
+      _command_list->IASetVertexBuffers( 0, 1, _geometries[j->get()->geometry].VertexView());
+      _command_list->IASetIndexBuffer(_geometries[j->get()->geometry].IndexView());
+      _command_list->SetGraphicsRootConstantBufferView(0, j->get()->ConstantBufferView(_current_frame));
+      _command_list->DrawIndexedInstanced(36, 1, 0, 0, 0);    
+    }
+  }
 
   D3D12_RESOURCE_BARRIER rt_present_barrier = {};
   rt_present_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -734,11 +699,6 @@ void RR::Renderer::Cleanup() {
     if (_command_allocators[i] != nullptr) {
       _command_allocators[i]->Release();
       _command_allocators[i] = nullptr;
-    }
-
-    if (_constant_buffer_upload_heap[i] != nullptr) {
-      _constant_buffer_upload_heap[i]->Release();
-      _constant_buffer_upload_heap[i] = nullptr;
     }
 
     if (_fences[i] != nullptr) {

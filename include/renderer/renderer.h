@@ -91,7 +91,6 @@ class Renderer {
   
   ID3D12Resource* _depth_scentil_buffer = nullptr;
   ID3D12DescriptorHeap* _depth_stencil_descriptor_heap = nullptr;
-  ID3D12Resource* _constant_buffer_upload_heap[kSwapchainBufferCount * 2];
 
  #ifdef DEBUG
   ID3D12Debug1* _debug_controller = nullptr;
@@ -105,6 +104,8 @@ class Renderer {
   void Cleanup();
   void WaitForPreviousFrame();
   void WaitForAllFrames();
+
+  friend class RendererComponent;
 };
 }
 

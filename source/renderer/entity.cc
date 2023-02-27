@@ -3,6 +3,7 @@
 #include "renderer/common.hpp"
 #include "renderer/components/entity_component.h"
 #include "renderer/components/camera_component.h"
+#include "renderer/components/renderer_component.h"
 #include "renderer/components/local_transform_component.h"
 #include "renderer/components/world_transform_component.h"
 
@@ -20,6 +21,7 @@ RR::Entity::Entity(uint32_t components) {
         _components[i] = std::make_shared<LocalTransform>();
         break;
       case ComponentTypes::kComponentType_Renderer:
+        _components[i] = std::make_shared<RendererComponent>();
         break;
       case ComponentTypes::kComponentType_Camera:
         _components[i] = std::make_shared<Camera>();

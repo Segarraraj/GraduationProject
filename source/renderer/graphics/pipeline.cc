@@ -228,4 +228,8 @@ void RR::GFX::Pipeline::Release() {
 
 ID3D12PipelineState* RR::GFX::Pipeline::PipelineState() { return _pipeline_state; }
 
-ID3D12RootSignature* RR::GFX::Pipeline::RootSignature() { return _root_signature; }
+ID3D12RootSignature* RR::GFX::Pipeline::RootSignature() {
+  return _root_signature;
+}
+
+uint32_t RR::GFX::Pipeline::GeometryType() { return _geometry_type; }
