@@ -107,6 +107,8 @@ int RR::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::shared
   _updated = false;
   _indices = data->index_size / sizeof(uint32_t);
   _type = geometry_type;
+  // FIXME: this is not safe as user could release 
+  // data->vertex_data or whatever
   _new_data = data;
 
   _vertex_buffer_view = std::make_unique<D3D12_VERTEX_BUFFER_VIEW>();

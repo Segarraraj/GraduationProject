@@ -3,8 +3,9 @@
 
 #include <DirectXMath.h>
 
-#include <memory>
+#include <map>
 #include <list>
+#include <memory>
 #include <vector>
 
 struct ID3D12Device;
@@ -29,8 +30,11 @@ namespace RR {
 class Window;
 class Entity;
 class Camera;
-class Geometry;
 struct GeometryData;
+class Geometry;
+namespace GFX {
+class Pipeline;
+}
 
 class Renderer {
  public:
@@ -64,6 +68,7 @@ class Renderer {
   std::shared_ptr<Entity> _main_camera;
 
   std::vector<Geometry> _geometries;
+  std::map<uint32_t, GFX::Pipeline> _pipelines;
 
   // This is memory acces mayhem, 0 cache hits
   // specially when accessing entity components,
@@ -84,9 +89,6 @@ class Renderer {
   ID3D12GraphicsCommandList* _command_list = nullptr;
   ID3D12Fence* _fences[kSwapchainBufferCount] = {0};  
   void* _fence_event = nullptr;
-
-  ID3D12PipelineState* _pipeline_state = nullptr;
-  ID3D12RootSignature* _root_signature = nullptr;
   
   ID3D12Resource* _depth_scentil_buffer = nullptr;
   ID3D12DescriptorHeap* _depth_stencil_descriptor_heap = nullptr;

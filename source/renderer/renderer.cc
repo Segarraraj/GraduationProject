@@ -5,8 +5,6 @@
 #include <Windows.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
-#include <d3d12sdklayers.h>
-#include <d3dcompiler.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -18,6 +16,7 @@
 #include "renderer/logger.h"
 #include "renderer/entity.h"
 #include "renderer/graphics/geometry.h"
+#include "renderer/graphics/pipeline.h"
 #include "renderer/components/camera_component.h"
 #include "renderer/components/local_transform_component.h"
 #include "renderer/components/world_transform_component.h"
@@ -63,7 +62,7 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
 
   _window->Show(); 
 
-  _main_camera = RegisterEntity((uint32_t)ComponentTypes::kComponentType_Camera);
+  _main_camera = RegisterEntity(ComponentTypes::kComponentType_Camera);
 
   _geometries = std::vector<Geometry>(20);
 
@@ -235,173 +234,6 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
 
   _fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 
-  // Create root signature
-  LOG_DEBUG("RR", "Creating root signature");
-
-  D3D12_FEATURE_DATA_ROOT_SIGNATURE root_signature_feature_data = {};
-  root_signature_feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-  result = _device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE,
-                                        &root_signature_feature_data,
-                                        sizeof(root_signature_feature_data));
-
-  if (FAILED(result)) {
-    LOG_WARNING("RR", "Current device don't support root signature v1.1, using v1.0");
-    root_signature_feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-  }
-
-  D3D12_ROOT_DESCRIPTOR1 root_descriptor = {};
-  root_descriptor.RegisterSpace = 0;
-  root_descriptor.ShaderRegister = 0;
-  root_descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
-
-  D3D12_ROOT_PARAMETER1 root_parameters[1] = {};
-  root_parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-  root_parameters[0].Descriptor = root_descriptor;
-  root_parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-
-  D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-  root_signature_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-  root_signature_desc.Desc_1_1.NumParameters = sizeof(root_parameters) / sizeof(D3D12_ROOT_PARAMETER);
-  root_signature_desc.Desc_1_1.pParameters = root_parameters;      
-  root_signature_desc.Desc_1_1.NumStaticSamplers = 0;
-  root_signature_desc.Desc_1_1.pStaticSamplers = nullptr;
-  root_signature_desc.Desc_1_1.Flags = 
-      D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | 
-      D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-      D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-      D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-      D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-
-  ID3DBlob* signature = nullptr;
-  ID3DBlob* error = nullptr;
-
-  result = D3D12SerializeVersionedRootSignature(
-      &root_signature_desc, &signature, &error);
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't serialeze root signature");
-    return 1;
-  }
-  
-  result = _device->CreateRootSignature(
-      0, signature->GetBufferPointer(), signature->GetBufferSize(),
-      IID_PPV_ARGS(&_root_signature));
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't create root signature");
-    return 1;
-  }
-
-  // Read shaders
-  LOG_DEBUG("RR", "Reading shaders");
-
-  ID3DBlob* vertex_shader;
-  UINT compile_flags = 0;
-
-#ifdef DEBUG
-  compile_flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-  compile_flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
-#endif  // DEBUG
-
-  result = D3DCompileFromFile(L"../../shaders/triangle.vert.hlsl", nullptr,
-                              nullptr, "main", "vs_5_1", compile_flags, 0,
-                              &vertex_shader, &error);
-
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't compile vertex shader");
-    return 1;
-  }
-
-  D3D12_SHADER_BYTECODE vertex_shader_bytecode = {};
-  vertex_shader_bytecode.BytecodeLength = vertex_shader->GetBufferSize();
-  vertex_shader_bytecode.pShaderBytecode = vertex_shader->GetBufferPointer();
-
-  ID3DBlob* fragment_shader;
-  result = D3DCompileFromFile(L"../../shaders/triangle.frag.hlsl", nullptr,
-                              nullptr, "main", "ps_5_1", compile_flags, 0,
-                              &fragment_shader, &error);
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't compile fragment shader");
-    return 1;
-  }
-
-  D3D12_SHADER_BYTECODE pixel_shader_bytecode = {};
-  pixel_shader_bytecode.BytecodeLength = fragment_shader->GetBufferSize();
-  pixel_shader_bytecode.pShaderBytecode = fragment_shader->GetBufferPointer();
-
-  D3D12_INPUT_ELEMENT_DESC input_layout[] = {
-      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-      {"COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
-  };
-
-  D3D12_INPUT_LAYOUT_DESC input_layout_desc = {};
-  input_layout_desc.pInputElementDescs = input_layout;
-  input_layout_desc.NumElements = sizeof(input_layout) / sizeof(D3D12_INPUT_ELEMENT_DESC);
-
-  D3D12_RASTERIZER_DESC rasterizer_desc = {};
-  rasterizer_desc.FillMode = D3D12_FILL_MODE_SOLID;
-  rasterizer_desc.CullMode = D3D12_CULL_MODE_NONE;
-  rasterizer_desc.FrontCounterClockwise = FALSE;
-  rasterizer_desc.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
-  rasterizer_desc.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-  rasterizer_desc.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-  rasterizer_desc.DepthClipEnable = TRUE;
-  rasterizer_desc.MultisampleEnable = FALSE;
-  rasterizer_desc.AntialiasedLineEnable = FALSE;
-  rasterizer_desc.ForcedSampleCount = 0;
-  rasterizer_desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-  D3D12_BLEND_DESC blend_desc = {};
-  blend_desc.AlphaToCoverageEnable = FALSE;
-  blend_desc.IndependentBlendEnable = FALSE;
-
-  const D3D12_RENDER_TARGET_BLEND_DESC render_target_blend_desc = {
-      FALSE,
-      FALSE,
-      D3D12_BLEND_ONE,
-      D3D12_BLEND_ZERO,
-      D3D12_BLEND_OP_ADD,
-      D3D12_BLEND_ONE,
-      D3D12_BLEND_ZERO,
-      D3D12_BLEND_OP_ADD,
-      D3D12_LOGIC_OP_NOOP,
-      D3D12_COLOR_WRITE_ENABLE_ALL,
-  };
-
-  for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) {
-    blend_desc.RenderTarget[i] = render_target_blend_desc;
-  }
-  D3D12_DEPTH_STENCILOP_DESC depth_stencil_op = { 
-    D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 
-    D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS
-  };  
-
-  D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
-  pipeline_desc.InputLayout = input_layout_desc;
-  pipeline_desc.pRootSignature = _root_signature;
-  pipeline_desc.VS = vertex_shader_bytecode;
-  pipeline_desc.PS = pixel_shader_bytecode;
-  pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-  pipeline_desc.RasterizerState = rasterizer_desc;
-  pipeline_desc.BlendState = blend_desc;
-  pipeline_desc.NumRenderTargets = 1;
-  pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-  pipeline_desc.SampleDesc.Count = 1;
-  pipeline_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-  pipeline_desc.DepthStencilState.DepthEnable = TRUE;
-  pipeline_desc.DepthStencilState.StencilEnable = FALSE;
-  pipeline_desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-  pipeline_desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-  pipeline_desc.DepthStencilState.FrontFace = depth_stencil_op;
-  pipeline_desc.DepthStencilState.BackFace = depth_stencil_op;
-  pipeline_desc.SampleMask = UINT_MAX;
-
-  result = _device->CreateGraphicsPipelineState(&pipeline_desc, 
-      IID_PPV_ARGS(&_pipeline_state));
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't create pipeline state");
-    return 1;
-  }
-
   LOG_DEBUG("RR", "Creating depth stencil buffer");
   // Create depth stencil descriptor heap
   D3D12_DESCRIPTOR_HEAP_DESC depth_stencil_descriptor_heap_desc = {};
@@ -495,6 +327,12 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
     
     _constant_buffer_upload_heap[i]->SetName(L"Constant buffer upload heap");
   }
+
+  printf("\n");
+  LOG_DEBUG("RR", "Initializing pipelines");
+  _pipelines[RR::PipelineTypes::kPipelineType_PBR] = RR::GFX::Pipeline();
+  _pipelines[RR::PipelineTypes::kPipelineType_PBR].Init(
+      _device, kPipelineType_PBR, kGeometryType_Positions_Normals);
 
   printf("\n");
   LOG_DEBUG("RR", "Renderer initialized");
@@ -749,7 +587,7 @@ void RR::Renderer::UpdatePipeline() {
     return;
   }
 
-  result = _command_list->Reset(_command_allocators[_current_frame], _pipeline_state);
+  result = _command_list->Reset(_command_allocators[_current_frame], nullptr);
   if (FAILED(result)) {
     _running = false;
     return;
@@ -804,7 +642,8 @@ void RR::Renderer::UpdatePipeline() {
   D3D12_GPU_VIRTUAL_ADDRESS constant_buffer_start =
       _constant_buffer_upload_heap[_current_frame]->GetGPUVirtualAddress();
 
-  _command_list->SetGraphicsRootSignature(_root_signature);
+  _command_list->SetPipelineState(_pipelines[RR::PipelineTypes::kPipelineType_PBR].PipelineState());
+  _command_list->SetGraphicsRootSignature(_pipelines[RR::PipelineTypes::kPipelineType_PBR].RootSignature());
   _command_list->RSSetViewports(1, &viewport);
   _command_list->RSSetScissorRects(1, &scissor_rect);
   _command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -846,10 +685,8 @@ void RR::Renderer::Render() {
   _swap_chain->Present(0, 0);
 }
 
-void RR::Renderer::Cleanup() { 
-  for (_current_frame = 0; _current_frame < kSwapchainBufferCount; _current_frame++) {
-    WaitForPreviousFrame();
-  }
+void RR::Renderer::Cleanup() {
+  WaitForAllFrames();
 
   if (_device != nullptr) {
     _device->Release();
@@ -874,16 +711,6 @@ void RR::Renderer::Cleanup() {
   if (_command_list != nullptr) {
     _command_list->Release();
     _command_list = nullptr;
-  }
-
-  if (_pipeline_state != nullptr) {
-    _pipeline_state->Release();
-    _pipeline_state = nullptr;
-  }
-
-  if (_root_signature != nullptr) {
-    _root_signature->Release();
-    _root_signature = nullptr;
   }
 
   if (_depth_scentil_buffer != nullptr) {

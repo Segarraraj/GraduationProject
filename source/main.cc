@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
 
   transform = std::static_pointer_cast<RR::LocalTransform>(
       renderer.MainCamera()->GetComponent(RR::kComponentType_LocalTransform));;
-  transform->position = {.0f, 1.5f, -6.0f};
+  transform->position = {.0f, 1.0f, -6.0f};
   transform->rotation = {15.0f, 180.0f, .0f};
 
   // Create vertex buffer

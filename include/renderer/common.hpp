@@ -31,6 +31,10 @@ struct GeometryData {
   uint32_t index_size;
 };
 
+enum PipelineTypes : uint32_t {
+  kPipelineType_None = 0U,
+  kPipelineType_PBR  = 1U,
+};
 }
 
 #endif  // !__COMMON_H__
