@@ -1,14 +1,15 @@
-#include "renderer/geometry.h"
+#include "renderer/graphics/geometry.h"
 
 #include <d3d12.h>
 
+#include "renderer/logger.h"
 #include "renderer/common.hpp"
 
-RR::Geometry::Geometry() {}
+RR::GFX::Geometry::Geometry() {}
 
-uint32_t RR::Geometry::Indices() const { return _indices; }
+uint32_t RR::GFX::Geometry::Indices() const { return _indices; }
 
-uint32_t RR::Geometry::Stride() const { 
+uint32_t RR::GFX::Geometry::Stride() const { 
   switch (_type) {
     case RR::kGeometryType_Positions_Normals:
       return sizeof(float) * 3 + sizeof(float) * 3;
@@ -22,17 +23,17 @@ uint32_t RR::Geometry::Stride() const {
   }
 }
 
-uint32_t RR::Geometry::Type() const { return _type; }
+uint32_t RR::GFX::Geometry::Type() const { return _type; }
 
-const D3D12_VERTEX_BUFFER_VIEW* RR::Geometry::VertexView() const {
+const D3D12_VERTEX_BUFFER_VIEW* RR::GFX::Geometry::VertexView() const {
   return _vertex_buffer_view.get();
 }
 
-const D3D12_INDEX_BUFFER_VIEW* RR::Geometry::IndexView() const {
+const D3D12_INDEX_BUFFER_VIEW* RR::GFX::Geometry::IndexView() const {
   return _index_buffer_view.get();
 }
 
-int RR::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::shared_ptr<RR::GeometryData> data) {
+int RR::GFX::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::shared_ptr<RR::GeometryData> data) {
   if (_initialized) {
     return 1;
   }
@@ -40,6 +41,8 @@ int RR::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::shared
   if (data == nullptr) {
     return 1;
   }
+
+  LOG_DEBUG("RR::GFX", "Initializing geometry, type: [%i]", geometry_type);
 
   HRESULT result = {};
 
@@ -72,6 +75,7 @@ int RR::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::shared
       IID_PPV_ARGS(&_vertex_default_buffer));
 
   if (FAILED(result)) {
+    LOG_ERROR("RR::GFX", "Couldn't create geometry vertex default buffer");
     return 1;
   }
 
@@ -81,6 +85,7 @@ int RR::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::shared
       IID_PPV_ARGS(&_vertex_upload_buffer));
 
   if (FAILED(result)) {
+    LOG_ERROR("RR::GFX", "Couldn't create geometry vertex upload buffer");
     return 1;
   }
 
@@ -91,6 +96,7 @@ int RR::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::shared
       IID_PPV_ARGS(&_index_default_buffer));
 
   if (FAILED(result)) {
+    LOG_ERROR("RR::GFX", "Couldn't create geometry index default buffer");
     return 1;
   }
 
@@ -100,6 +106,7 @@ int RR::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::shared
       IID_PPV_ARGS(&_index_upload_buffer));
 
   if (FAILED(result)) {
+    LOG_ERROR("RR::GFX", "Couldn't create geometry index upload buffer");
     return 1;
   }
 
@@ -126,7 +133,7 @@ int RR::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::shared
   return 0;
 }
 
-int RR::Geometry::Update(ID3D12GraphicsCommandList* command_list) {
+int RR::GFX::Geometry::Update(ID3D12GraphicsCommandList* command_list) {
   if (!_initialized) {
     return 1;
   }
@@ -184,7 +191,7 @@ int RR::Geometry::Update(ID3D12GraphicsCommandList* command_list) {
   return 0;
 }
 
-void RR::Geometry::Release() {
+void RR::GFX::Geometry::Release() {
   if (!_initialized) {
     return;
   }

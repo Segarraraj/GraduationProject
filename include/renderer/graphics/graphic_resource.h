@@ -2,6 +2,7 @@
 #define __GRAPHIC_RESOURCE_H__ 1
 
 namespace RR {
+namespace GFX {
 class GraphicResource {
  public:
   GraphicResource() = default;
@@ -16,6 +17,7 @@ class GraphicResource {
 
   virtual void Release() = 0;
 };
+}
 }
 
 #endif  // !__GRAPHIC_RESOURCE_H__

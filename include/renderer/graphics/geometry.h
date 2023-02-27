@@ -14,6 +14,7 @@ struct D3D12_INDEX_BUFFER_VIEW;
 
 namespace RR {
 struct GeometryData;
+namespace GFX {
 class Geometry : public GraphicResource {
  public:
   Geometry();
@@ -43,6 +44,7 @@ class Geometry : public GraphicResource {
   std::unique_ptr<D3D12_VERTEX_BUFFER_VIEW> _vertex_buffer_view = nullptr;
   std::unique_ptr<D3D12_INDEX_BUFFER_VIEW> _index_buffer_view = nullptr;
 };
+}
 }
 
 

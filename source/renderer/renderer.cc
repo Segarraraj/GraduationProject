@@ -15,8 +15,8 @@
 #include "renderer/window.h"
 #include "renderer/logger.h"
 #include "renderer/entity.h"
-#include "renderer/graphics/geometry.h"
 #include "renderer/graphics/pipeline.h"
+#include "renderer/graphics/geometry.h"
 #include "renderer/components/camera_component.h"
 #include "renderer/components/local_transform_component.h"
 #include "renderer/components/world_transform_component.h"
@@ -64,7 +64,7 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
 
   _main_camera = RegisterEntity(ComponentTypes::kComponentType_Camera);
 
-  _geometries = std::vector<Geometry>(20);
+  _geometries = std::vector<GFX::Geometry>(20);
 
   HRESULT result;
 
@@ -409,8 +409,7 @@ std::shared_ptr<RR::Entity> RR::Renderer::RegisterEntity(
   return new_entity;
 }
 
-int32_t RR::Renderer::CreateGeometry(uint32_t geometry_type,
-                                     std::shared_ptr<GeometryData> data) {
+int32_t RR::Renderer::CreateGeometry(uint32_t geometry_type, std::shared_ptr<GeometryData> data) {
 
   for (size_t i = 0; i < _geometries.size(); i++) {
     if (_geometries[i].Initialized()) {
@@ -721,6 +720,10 @@ void RR::Renderer::Cleanup() {
   if (_depth_stencil_descriptor_heap != nullptr) {
     _depth_stencil_descriptor_heap->Release();
     _depth_stencil_descriptor_heap = nullptr;
+  }
+
+  for (std::map<uint32_t, GFX::Pipeline>::iterator i = _pipelines.begin(); i != _pipelines.end(); i++) {
+    i->second.Release();
   }
 
   for (size_t i = 0; i < _geometries.size(); i++) {
