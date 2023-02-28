@@ -3,13 +3,24 @@
 #include <stdio.h>
 #include <string.h>
 #include <Windows.h>
+#include <d3d12.h>
 #include <dxgi1_6.h>
-#include <d3d12sdklayers.h>
-#include <d3dcompiler.h>
+#include <stdlib.h>
+#include <time.h>
+
+#include <chrono>
 
 #include "utils.hpp"
+#include "renderer/common.hpp"
 #include "renderer/window.h"
 #include "renderer/logger.h"
+#include "renderer/entity.h"
+#include "renderer/graphics/pipeline.h"
+#include "renderer/graphics/geometry.h"
+#include "renderer/components/camera_component.h"
+#include "renderer/components/local_transform_component.h"
+#include "renderer/components/world_transform_component.h"
+#include "renderer/components/renderer_component.h"
 
 static long long CALLBACK WindowProc(void* window, unsigned int message,
                               unsigned long long wParam, long long lParam) {
@@ -20,6 +31,9 @@ static long long CALLBACK WindowProc(void* window, unsigned int message,
   switch (message) {
     case WM_CLOSE:
       renderer->Stop();
+      break;
+    case WM_SIZE:
+      renderer->Resize();
       break;
     default: {
       result = DefWindowProc((HWND)window, message, wParam, lParam);
@@ -33,11 +47,14 @@ RR::Renderer::Renderer() {}
 
 RR::Renderer::~Renderer() {}
 
-int RR::Renderer::Init(void (*update)()) {
+int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   LOG_DEBUG("RR", "Initializing renderer");
+
+  srand(time(NULL));
   
   // Set client update logic callback
-  update_ = update;
+  _update = update;
+  _user_data = user_data;
 
   // Initialize window
   _window = std::make_unique<RR::Window>();
@@ -45,6 +62,10 @@ int RR::Renderer::Init(void (*update)()) {
                 WindowProc, this);
 
   _window->Show(); 
+
+  _main_camera = RegisterEntity(ComponentTypes::kComponentType_Camera);
+
+  _geometries = std::vector<GFX::Geometry>(20);
 
   HRESULT result;
 
@@ -55,7 +76,6 @@ int RR::Renderer::Init(void (*update)()) {
   result = D3D12GetDebugInterface(IID_PPV_ARGS(&_debug_controller));
   if (FAILED(result)) {
     LOG_ERROR("RR", "Couldn't get debug interface");
-    Cleanup();
     return 1;
   }
 
@@ -70,7 +90,6 @@ int RR::Renderer::Init(void (*update)()) {
   result = CreateDXGIFactory2(factory_flags, IID_PPV_ARGS(&factory));
   if (FAILED(result)) {
     LOG_ERROR("RR", "Couldn't create factory");
-    Cleanup();
     return 1;
   }
 
@@ -117,19 +136,16 @@ int RR::Renderer::Init(void (*update)()) {
   result = _device->CreateCommandQueue(&command_queue_desc, IID_PPV_ARGS(&_command_queue));
   if (FAILED(result)) {
     LOG_ERROR("RR", "Couldn't create command queue");
-    Cleanup();
     return 1;
   }
+  _command_queue->SetName(L"Graphics command queue");
 
   // Create swapchain
   LOG_DEBUG("RR", "Creating swapchain");
 
-  RECT window_screen_bounds;
-  GetClientRect((HWND)_window->window(), &window_screen_bounds);
-
   DXGI_SWAP_CHAIN_DESC1 swapchain_desc = {};
-  swapchain_desc.Width = window_screen_bounds.right - window_screen_bounds.left;
-  swapchain_desc.Height = window_screen_bounds.bottom - window_screen_bounds.top;
+  swapchain_desc.Width = _window->width();
+  swapchain_desc.Height = _window->height();
   swapchain_desc.Stereo = FALSE;
   swapchain_desc.SampleDesc.Count = 1;
   swapchain_desc.SampleDesc.Quality = 0;
@@ -176,16 +192,17 @@ int RR::Renderer::Init(void (*update)()) {
   D3D12_CPU_DESCRIPTOR_HANDLE rt_descriptor_handle(
       _rt_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
 
-  for (unsigned int i = 0; i < kSwapchainBufferCount; i++) {
+  for (uint16_t i = 0; i < kSwapchainBufferCount; i++) {
     _swap_chain->GetBuffer(i, IID_PPV_ARGS(&_render_targets[i]));
     _device->CreateRenderTargetView(_render_targets[i], nullptr, rt_descriptor_handle);
+    _render_targets[i]->SetName(L"Render Target");
     rt_descriptor_handle.ptr += (1 * descriptor_size);
   }
 
   // Create command allocators
   LOG_DEBUG("RR", "Creating command allocators");
 
-  for (unsigned int i = 0; i < kSwapchainBufferCount; i++) {
+  for (uint16_t i = 0; i < kSwapchainBufferCount; i++) {
     result = _device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
                  IID_PPV_ARGS(&_command_allocators[i]));
   }
@@ -207,259 +224,115 @@ int RR::Renderer::Init(void (*update)()) {
   // Create fences
   LOG_DEBUG("RR", "Creating fences");
 
-  for (unsigned int i = 0; i < kSwapchainBufferCount; i++) {
+  for (uint16_t i = 0; i < kSwapchainBufferCount; i++) {
     result = _device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fences[i]));
     if (FAILED(result)) {
       LOG_DEBUG("RR", "Couldn't create fence");
       return 1;
     }
-    
-    _fence_values[i] = 0;
+    _fences[i]->Signal(1);
   }
 
   _fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 
-  // Create root signature
-  LOG_DEBUG("RR", "Creating root signature");
-
-  D3D12_FEATURE_DATA_ROOT_SIGNATURE root_signature_feature_data = {};
-  root_signature_feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-  result = _device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE,
-                                        &root_signature_feature_data,
-                                        sizeof(root_signature_feature_data));
+  LOG_DEBUG("RR", "Creating depth stencil buffer");
+  // Create depth stencil descriptor heap
+  D3D12_DESCRIPTOR_HEAP_DESC depth_stencil_descriptor_heap_desc = {};
+  depth_stencil_descriptor_heap_desc.NumDescriptors = 1;
+  depth_stencil_descriptor_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+  depth_stencil_descriptor_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+  result = _device->CreateDescriptorHeap(&depth_stencil_descriptor_heap_desc,
+      IID_PPV_ARGS(&_depth_stencil_descriptor_heap));
 
   if (FAILED(result)) {
-    LOG_WARNING("RR", "Current device don't support root signature v1.1, using v1.0");
-    root_signature_feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-  }
-
-  D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-  root_signature_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-  root_signature_desc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-  root_signature_desc.Desc_1_1.NumParameters = 0;
-  root_signature_desc.Desc_1_1.pParameters = nullptr;      
-  root_signature_desc.Desc_1_1.NumStaticSamplers = 0;
-  root_signature_desc.Desc_1_1.pStaticSamplers = nullptr;
-
-  ID3DBlob* signature = nullptr;
-  ID3DBlob* error = nullptr;
-
-  result = D3D12SerializeVersionedRootSignature(&root_signature_desc, &signature, &error);
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't serialeze root signature");
-    return 1;
-  }
-  
-  result = _device->CreateRootSignature(
-      0, signature->GetBufferPointer(), signature->GetBufferSize(),
-      IID_PPV_ARGS(&_root_signature));
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't create root signature");
+    LOG_ERROR("RR", "Couldn't create depth stencil descriptor heap");
     return 1;
   }
 
-  // Read shaders
-  LOG_DEBUG("RR", "Reading shaders");
+  D3D12_HEAP_PROPERTIES default_heap_properties = {};
+  default_heap_properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+  default_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+  default_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 
-  ID3DBlob* vertex_shader;
-  UINT compile_flags = 0;
+  D3D12_DEPTH_STENCIL_VIEW_DESC depth_stencil_desc = {};
+  depth_stencil_desc.Format = DXGI_FORMAT_D32_FLOAT;
+  depth_stencil_desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+  depth_stencil_desc.Flags = D3D12_DSV_FLAG_NONE;
+
+  D3D12_CLEAR_VALUE depth_stencil_clear_values = {};
+  depth_stencil_clear_values.Format = DXGI_FORMAT_D32_FLOAT;
+  depth_stencil_clear_values.DepthStencil.Depth = 1.0f;
+  depth_stencil_clear_values.DepthStencil.Stencil = 0;
+
+  D3D12_RESOURCE_DESC depth_stencil_buffer_desc = {};
+  depth_stencil_buffer_desc.Format = DXGI_FORMAT_D32_FLOAT;
+  depth_stencil_buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+  depth_stencil_buffer_desc.Alignment = 0;
+  depth_stencil_buffer_desc.Width = _window->width();
+  depth_stencil_buffer_desc.Height = _window->height();
+  depth_stencil_buffer_desc.DepthOrArraySize = 1;
+  depth_stencil_buffer_desc.MipLevels = 0;
+  depth_stencil_buffer_desc.SampleDesc.Count = 1;
+  depth_stencil_buffer_desc.SampleDesc.Quality = 0;
+  depth_stencil_buffer_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+  depth_stencil_buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+  result = _device->CreateCommittedResource(
+      &default_heap_properties, D3D12_HEAP_FLAG_NONE,
+      &depth_stencil_buffer_desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, 
+      &depth_stencil_clear_values, IID_PPV_ARGS(&_depth_scentil_buffer));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't create depth stencil buffer");
+    return 1;
+  }
 
 #ifdef DEBUG
-  compile_flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-  compile_flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+  _depth_scentil_buffer->SetName(L"Depth/Stencil buffer");
+  _depth_stencil_descriptor_heap->SetName(L"Depth/Stencil descriptor heap");
 #endif  // DEBUG
 
-  result = D3DCompileFromFile(L"../../shaders/triangle.vert.hlsl", nullptr,
-                              nullptr, "main", "vs_5_1", compile_flags, 0,
-                              &vertex_shader, &error);
+  _device->CreateDepthStencilView(
+      _depth_scentil_buffer, &depth_stencil_desc,
+      _depth_stencil_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
 
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't compile vertex shader");
-    return 1;
-  }
+  printf("\n");
+  LOG_DEBUG("RR", "Initializing pipelines");
+  _pipelines[RR::PipelineTypes::kPipelineType_PBR] = RR::GFX::Pipeline();
+  _pipelines[RR::PipelineTypes::kPipelineType_PBR].Init(
+      _device, kPipelineType_PBR, kGeometryType_Positions_Normals);
 
-  D3D12_SHADER_BYTECODE vertex_shader_bytecode = {};
-  vertex_shader_bytecode.BytecodeLength = vertex_shader->GetBufferSize();
-  vertex_shader_bytecode.pShaderBytecode = vertex_shader->GetBufferPointer();
-
-  ID3DBlob* fragment_shader;
-  result = D3DCompileFromFile(L"../../shaders/triangle.frag.hlsl", nullptr,
-                              nullptr, "main", "ps_5_1", compile_flags, 0,
-                              &fragment_shader, &error);
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't compile fragment shader");
-    return 1;
-  }
-
-  D3D12_SHADER_BYTECODE pixel_shader_bytecode = {};
-  pixel_shader_bytecode.BytecodeLength = fragment_shader->GetBufferSize();
-  pixel_shader_bytecode.pShaderBytecode = fragment_shader->GetBufferPointer();
-
-  D3D12_INPUT_ELEMENT_DESC input_layout[] = {
-      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
-  };
-
-  D3D12_INPUT_LAYOUT_DESC input_layout_desc = {};
-  input_layout_desc.pInputElementDescs = input_layout;
-  input_layout_desc.NumElements = sizeof(input_layout) / sizeof(D3D12_INPUT_ELEMENT_DESC);
-
-  D3D12_RASTERIZER_DESC rasterizer_desc = {};
-  rasterizer_desc.FillMode = D3D12_FILL_MODE_SOLID;
-  rasterizer_desc.CullMode = D3D12_CULL_MODE_NONE;
-  rasterizer_desc.FrontCounterClockwise = FALSE;
-  rasterizer_desc.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
-  rasterizer_desc.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-  rasterizer_desc.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-  rasterizer_desc.DepthClipEnable = TRUE;
-  rasterizer_desc.MultisampleEnable = FALSE;
-  rasterizer_desc.AntialiasedLineEnable = FALSE;
-  rasterizer_desc.ForcedSampleCount = 0;
-  rasterizer_desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-  D3D12_BLEND_DESC blend_desc = {};
-  blend_desc.AlphaToCoverageEnable = FALSE;
-  blend_desc.IndependentBlendEnable = FALSE;
-
-  const D3D12_RENDER_TARGET_BLEND_DESC render_target_blend_desc = {
-      FALSE,
-      FALSE,
-      D3D12_BLEND_ONE,
-      D3D12_BLEND_ZERO,
-      D3D12_BLEND_OP_ADD,
-      D3D12_BLEND_ONE,
-      D3D12_BLEND_ZERO,
-      D3D12_BLEND_OP_ADD,
-      D3D12_LOGIC_OP_NOOP,
-      D3D12_COLOR_WRITE_ENABLE_ALL,
-  };
-
-  for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) {
-    blend_desc.RenderTarget[i] = render_target_blend_desc;
-  }
-
-  D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
-  pipeline_desc.InputLayout = input_layout_desc;
-  pipeline_desc.pRootSignature = _root_signature;
-  pipeline_desc.VS = vertex_shader_bytecode;
-  pipeline_desc.PS = pixel_shader_bytecode;
-  pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-  pipeline_desc.RasterizerState = rasterizer_desc;
-  pipeline_desc.BlendState = blend_desc;
-  pipeline_desc.NumRenderTargets = 1;
-  pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-  pipeline_desc.SampleDesc.Count = 1;
-  pipeline_desc.DepthStencilState.DepthEnable = FALSE;
-  pipeline_desc.DepthStencilState.StencilEnable = FALSE;
-  pipeline_desc.SampleMask = UINT_MAX;
-
-  result = _device->CreateGraphicsPipelineState(&pipeline_desc, 
-      IID_PPV_ARGS(&_pipeline_state));
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't create pipeline state");
-    return 1;
-  }
-
-  // Create vertex buffer
-  DirectX::XMFLOAT3 vertex_list[] = {
-      {0.0f, 0.5f, 0.5f}, {0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, 0.5f}
-  };
-
-  D3D12_HEAP_PROPERTIES vertex_default_heap_properties = {};
-  vertex_default_heap_properties.Type = D3D12_HEAP_TYPE_DEFAULT;
-  vertex_default_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-  vertex_default_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-
-  D3D12_RESOURCE_DESC vertex_resource_desc = {};
-  vertex_resource_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-  vertex_resource_desc.Alignment = 0;
-  vertex_resource_desc.Width = sizeof(vertex_list);
-  vertex_resource_desc.Height = 1;
-  vertex_resource_desc.DepthOrArraySize = 1;
-  vertex_resource_desc.MipLevels = 1;
-  vertex_resource_desc.Format = DXGI_FORMAT_UNKNOWN;
-  vertex_resource_desc.SampleDesc.Count = 1;
-  vertex_resource_desc.SampleDesc.Quality = 0;
-  vertex_resource_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-  vertex_resource_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-   
-  result = _device->CreateCommittedResource(
-      &vertex_default_heap_properties, D3D12_HEAP_FLAG_NONE, 
-      &vertex_resource_desc, D3D12_RESOURCE_STATE_COMMON, 
-      nullptr, IID_PPV_ARGS(&_vertex_default_buffer));
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't create vertex buffer default resource heap");
-    return 1;
-  }
-
-  ID3D12Resource* vertex_buffer_upload_heap = nullptr;
-  D3D12_HEAP_PROPERTIES vertex_upload_heap_properties = {};
-  vertex_upload_heap_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
-  vertex_upload_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-  vertex_upload_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-
-  result = _device->CreateCommittedResource(
-      &vertex_upload_heap_properties, D3D12_HEAP_FLAG_NONE,
-      &vertex_resource_desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-      IID_PPV_ARGS(&vertex_buffer_upload_heap));
-  if (FAILED(result)) {
-    LOG_ERROR("RR", "Couldn't create vertex buffer upload resource heap");
-    return 1;
-  }
-
-  UINT8* upload_resource_heap_begin;
-  D3D12_RANGE read_range;
-  read_range.Begin = 0;
-  read_range.End = 0;
-
-  // Copy data to upload resource heap
-  vertex_buffer_upload_heap->Map(0, &read_range,
-      reinterpret_cast<void**>(&upload_resource_heap_begin));
-  memcpy(upload_resource_heap_begin, vertex_list, sizeof(vertex_list));
-  vertex_buffer_upload_heap->Unmap(0, nullptr);
-
-  D3D12_RESOURCE_BARRIER vb_upload_resource_heap_barrier = {};
-  vb_upload_resource_heap_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-  vb_upload_resource_heap_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-  vb_upload_resource_heap_barrier.Transition.pResource = _vertex_default_buffer;
-  vb_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
-  vb_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-  vb_upload_resource_heap_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-  
-  _command_list->Reset(_command_allocators[_current_frame], NULL);
-  _command_list->ResourceBarrier(1, &vb_upload_resource_heap_barrier);
-  _command_list->CopyResource(_vertex_default_buffer, vertex_buffer_upload_heap);
-  vb_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-  vb_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-  _command_list->ResourceBarrier(1, &vb_upload_resource_heap_barrier);
-  _command_list->Close();
-
-  ID3D12CommandList* command_lists[] = {_command_list};
-  _command_queue->ExecuteCommandLists(sizeof(command_lists) / sizeof(ID3D12CommandList), command_lists);
-
-  _fence_values[_current_frame]++;   
-  _command_queue->Signal(_fences[_current_frame], _fence_values[_current_frame]);
-
-  _vertex_buffer_view = std::make_unique<D3D12_VERTEX_BUFFER_VIEW>();
-  _vertex_buffer_view->BufferLocation = _vertex_default_buffer->GetGPUVirtualAddress();
-  _vertex_buffer_view->StrideInBytes = sizeof(DirectX::XMFLOAT3);
-  _vertex_buffer_view->SizeInBytes = sizeof(vertex_list);
-
-
+  printf("\n");
   LOG_DEBUG("RR", "Renderer initialized");
+  LOG_DEBUG("RR", "    Available geometries: %i", _geometries.size());
   return 0;
 }
 
 void RR::Renderer::Start() {
+  std::chrono::time_point<std::chrono::steady_clock> renderer_start, frame_start, frame_end;
+  renderer_start = std::chrono::high_resolution_clock::now();
+  
   while (_running) {
+    do {
+      frame_end = std::chrono::high_resolution_clock::now();
+      delta_time = std::chrono::duration<float, std::milli>(frame_end - frame_start).count();
+    } while (delta_time < (1000.0f / 60.0f));
+
+    frame_start = std::chrono::high_resolution_clock::now();
+    _current_frame = _swap_chain->GetCurrentBackBufferIndex();
+    elapsed_time = std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - renderer_start).count();
+
     MSG message;
     while (PeekMessage(&message, (HWND)_window->window(), 0, 0, PM_REMOVE)) {
       TranslateMessage(&message);
       DispatchMessage(&message);
     }
 
-    update_();
-    WaitForFrame();
+    UpdateGraphicResources();
+
+    WaitForPreviousFrame();
+    
+    _update(_user_data);
+    InternalUpdate();
     UpdatePipeline();
     Render();
   }
@@ -472,7 +345,140 @@ void RR::Renderer::Stop() {
 }
 
 void RR::Renderer::Resize() {
+  if (_swap_chain == nullptr) {
+    return;
+  }
 
+  for (_current_frame = 0; _current_frame < kSwapchainBufferCount; _current_frame++) {
+    WaitForPreviousFrame();
+  }
+
+  for (uint16_t i = 0; i < kSwapchainBufferCount; i++) {
+    _render_targets[i]->Release();
+  }
+
+  // todo resize depth stencil buffer
+  _swap_chain->ResizeBuffers(kSwapchainBufferCount, _window->width(),
+                              _window->height(), DXGI_FORMAT_UNKNOWN, 0);
+}
+
+std::shared_ptr<RR::Entity> RR::Renderer::MainCamera() const {
+  return _main_camera;
+}
+
+std::shared_ptr<RR::Entity> RR::Renderer::RegisterEntity(
+    uint32_t component_types) {
+  component_types |= ComponentTypes::kComponentType_LocalTransform |
+                     ComponentTypes::kComponentType_WorldTransform;
+
+  std::shared_ptr<Entity> new_entity = std::make_shared<Entity>(component_types);
+  _entities.push_back(new_entity);
+  return new_entity;
+}
+
+int32_t RR::Renderer::CreateGeometry(uint32_t geometry_type, std::shared_ptr<GeometryData> data) {
+
+  for (size_t i = 0; i < _geometries.size(); i++) {
+    if (_geometries[i].Initialized()) {
+      continue;
+    }
+
+    _geometries[i].Init(_device, geometry_type, data);
+    return i;
+  }
+
+  return -1;
+}
+
+void RR::Renderer::UpdateGraphicResources() { 
+  size_t i = 0;
+  bool update = false;
+  for (; i < _geometries.size() && !update; i++) {
+    if (!_geometries[i].Updated() && _geometries[i].Initialized()) {
+      update = true;
+    }
+  }
+
+  if (!update) {
+    return;
+  }
+
+  WaitForAllFrames();
+
+  _command_allocators[_current_frame]->Reset();
+  _command_list->Reset(_command_allocators[_current_frame], nullptr);
+
+  for (i = i - 1; i < _geometries.size(); i++) {
+    if (!_geometries[i].Updated() && _geometries[i].Initialized()) {
+      _geometries[i].Update(_command_list);
+    }
+  }
+
+  _command_list->Close();
+
+  ID3D12CommandList* lists[] = {_command_list};
+
+  _fences[_current_frame]->Signal(0);
+  _command_queue->ExecuteCommandLists(1, lists);
+  _command_queue->Signal(_fences[_current_frame], 1);
+}
+
+void RR::Renderer::InternalUpdate() {
+  std::map<uint32_t, std::list<std::pair<std::shared_ptr<LocalTransform>, std::shared_ptr<WorldTransform>>>> components;
+
+  // Prepare parent and child components
+  uint32_t max_parent_level = 0;
+  for (uint32_t level = 0; level <= max_parent_level; level++) {
+    for (std::list<std::shared_ptr<Entity>>::iterator i = _entities.begin(); i != _entities.end(); i++) {
+      std::shared_ptr<LocalTransform> local_transform =
+          std::static_pointer_cast<LocalTransform>(
+              i->get()->GetComponent(ComponentTypes::kComponentType_LocalTransform));
+    
+      if (local_transform == nullptr) {
+        continue;
+      }
+
+      if (local_transform->level > max_parent_level) {
+        max_parent_level = local_transform->level;
+      }
+
+      std::shared_ptr<WorldTransform> world_transform =
+          std::static_pointer_cast<WorldTransform>(
+              i->get()->GetComponent(ComponentTypes::kComponentType_WorldTransform));
+
+      std::pair<std::shared_ptr<LocalTransform>, std::shared_ptr<WorldTransform>> pair;
+
+      pair.first = local_transform;
+      pair.second = world_transform;
+      components[local_transform->level].push_back(pair);
+    }
+  }
+
+  // Calculate world positions
+  for (uint32_t level = 0; level <= max_parent_level; level++) {
+    for (std::list<std::pair<std::shared_ptr<LocalTransform>, std::shared_ptr<WorldTransform>>>::iterator i = components[level].begin();
+         i != components[level].end(); i++) {
+
+       DirectX::XMMATRIX world =
+          DirectX::XMMatrixIdentity() *
+          DirectX::XMMatrixTranslationFromVector(DirectX::XMLoadFloat3(&i->first->position)) *
+          DirectX::XMMatrixRotationX(DirectX::XMConvertToRadians(i->first->rotation.x)) *
+          DirectX::XMMatrixRotationY(DirectX::XMConvertToRadians(i->first->rotation.y)) *
+          DirectX::XMMatrixRotationZ(DirectX::XMConvertToRadians(i->first->rotation.z)) *
+          DirectX::XMMatrixScalingFromVector(DirectX::XMLoadFloat3(&i->first->scale));
+
+       if (level != 0) {
+         std::shared_ptr<WorldTransform> parent_world =
+             std::static_pointer_cast<WorldTransform>(
+                 i->first->parent->GetComponent(
+                     ComponentTypes::kComponentType_WorldTransform));
+
+         world = world * DirectX::XMLoadFloat4x4(&parent_world->world);
+       }
+
+       DirectX::XMStoreFloat4x4(&i->second->world, world);
+    }
+  }
 }
 
 void RR::Renderer::UpdatePipeline() { 
@@ -482,10 +488,66 @@ void RR::Renderer::UpdatePipeline() {
     return;
   }
 
-  result = _command_list->Reset(_command_allocators[_current_frame], NULL);
+  result = _command_list->Reset(_command_allocators[_current_frame], nullptr);
   if (FAILED(result)) {
     _running = false;
     return;
+  }
+
+  std::shared_ptr<WorldTransform> camera_world =
+      std::static_pointer_cast<WorldTransform>(_main_camera->GetComponent(
+          ComponentTypes::kComponentType_WorldTransform));
+
+  std::shared_ptr<Camera> camera = std::static_pointer_cast<Camera>(
+      _main_camera->GetComponent(ComponentTypes::kComponentType_Camera));
+
+  DirectX::XMMATRIX view = DirectX::XMMatrixLookToLH(
+      DirectX::XMVectorSet(camera_world->world._41, camera_world->world._42,
+                           camera_world->world._43, 0.0f),
+      DirectX::XMVectorSet(camera_world->world._31, camera_world->world._32,
+                           camera_world->world._33, 0.0f),
+      DirectX::XMVectorSet(camera_world->world._21, camera_world->world._22,
+                           camera_world->world._23, 0.0f));
+
+  DirectX::XMMATRIX projection = DirectX::XMMatrixPerspectiveFovLH(
+      camera->fov * (3.14f / 180.0f), _window->aspectRatio(), camera->nearZ,
+      camera->farZ);
+
+  std::map<uint32_t, std::list<std::shared_ptr<RendererComponent>>> render_list;
+  for (std::list<std::shared_ptr<Entity>>::iterator i = _entities.begin();
+       i != _entities.end(); i++) {
+    std::shared_ptr<RendererComponent> renderer =
+        std::static_pointer_cast<RendererComponent>(
+            i->get()->GetComponent(ComponentTypes::kComponentType_Renderer));
+
+    std::shared_ptr<WorldTransform> world_transform =
+        std::static_pointer_cast<WorldTransform>(i->get()->GetComponent(
+            ComponentTypes::kComponentType_WorldTransform));
+
+    if (renderer == nullptr || world_transform == nullptr) {
+      continue;
+    }
+
+    if (!renderer->_initialized) {
+      continue;
+    }
+
+    RendererSettings settings = {};
+    switch (renderer->_pipeline_type) {
+      case RR::PipelineTypes::kPipelineType_PBR:
+        DirectX::XMStoreFloat4x4(&settings.pbr_settings.mvp.view,
+                                 DirectX::XMMatrixTranspose(view));
+        DirectX::XMStoreFloat4x4(&settings.pbr_settings.mvp.projection,
+                                 DirectX::XMMatrixTranspose(projection));
+        DirectX::XMStoreFloat4x4(
+            &settings.pbr_settings.mvp.model,
+            DirectX::XMMatrixTranspose(
+                DirectX::XMLoadFloat4x4(&world_transform->world)));
+        renderer->Update(settings, _current_frame);
+        break;
+    }
+
+    render_list[renderer->_pipeline_type].push_back(renderer);
   }
 
   D3D12_RESOURCE_BARRIER rt_render_barrier = {};
@@ -497,41 +559,68 @@ void RR::Renderer::UpdatePipeline() {
   rt_render_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
   _command_list->ResourceBarrier(1, &rt_render_barrier);
 
-  unsigned int descriptor_size =
-      _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+  unsigned int rt_descriptor_size = _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+  unsigned int depth_descriptor_size = _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+  
   D3D12_CPU_DESCRIPTOR_HANDLE rt_descriptor_handle(
       _rt_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
-  rt_descriptor_handle.ptr += _current_frame * descriptor_size;
 
-  _command_list->OMSetRenderTargets(1, &rt_descriptor_handle, FALSE, nullptr);
+  D3D12_CPU_DESCRIPTOR_HANDLE depth_descriptor_handle(
+      _depth_stencil_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
+  
+  rt_descriptor_handle.ptr += _current_frame * rt_descriptor_size;
 
-  const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
-  _command_list->ClearRenderTargetView(rt_descriptor_handle, clearColor, 0,
-                                       nullptr);
+  _command_list->OMSetRenderTargets(1, 
+      &rt_descriptor_handle, FALSE, 
+      &depth_descriptor_handle);
 
-  RECT window_screen_bounds;
-  GetClientRect((HWND)_window->window(), &window_screen_bounds);
+  _command_list->ClearRenderTargetView(
+      rt_descriptor_handle, camera->clear_color, 0, nullptr);
+
+  _command_list->ClearDepthStencilView(
+      depth_descriptor_handle, D3D12_CLEAR_FLAG_DEPTH, 
+      1.0f, 0, 0, nullptr);
 
   D3D12_VIEWPORT viewport = {};
   viewport.TopLeftX = 0;
   viewport.TopLeftY = 0;
-  viewport.Width = window_screen_bounds.right - window_screen_bounds.left;
-  viewport.Height = window_screen_bounds.bottom - window_screen_bounds.top;
+  viewport.Width = _window->width();
+  viewport.Height = _window->height();
   viewport.MinDepth = 0.0f;
   viewport.MaxDepth = 1.0f;
 
   D3D12_RECT scissor_rect = {};
   scissor_rect.left = 0;
   scissor_rect.top = 0;
-  scissor_rect.right = window_screen_bounds.right - window_screen_bounds.left;
-  scissor_rect.bottom = window_screen_bounds.bottom - window_screen_bounds.top;
+  scissor_rect.right = _window->width();
+  scissor_rect.bottom = _window->height();
 
-  _command_list->SetPipelineState(_pipeline_state);
-  _command_list->SetGraphicsRootSignature(_root_signature);
+  _command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   _command_list->RSSetViewports(1, &viewport);
   _command_list->RSSetScissorRects(1, &scissor_rect);
-  _command_list->IASetVertexBuffers(0, 1, _vertex_buffer_view.get());
-  _command_list->DrawInstanced(3, 1, 0, 0);
+
+  // CHANGE PipelineTypes values to change sorting and render order
+  for (std::map<uint32_t, std::list<std::shared_ptr<RendererComponent>>>::iterator i = render_list.begin();
+       i != render_list.end(); i++) {
+    GFX::Pipeline pipeline = _pipelines[i->first];
+    _command_list->SetPipelineState(pipeline.PipelineState());
+    _command_list->SetGraphicsRootSignature(pipeline.RootSignature());
+    
+    for (std::list<std::shared_ptr<RendererComponent>>::iterator j = i->second.begin();
+         j != i->second.end(); j++) {
+
+
+      if (pipeline.GeometryType() != _geometries[j->get()->geometry].Type()) {
+        LOG_WARNING("RR", "Traying to draw geometry with incompatible pipeline");
+        continue;
+      }
+
+      _command_list->IASetVertexBuffers( 0, 1, _geometries[j->get()->geometry].VertexView());
+      _command_list->IASetIndexBuffer(_geometries[j->get()->geometry].IndexView());
+      _command_list->SetGraphicsRootConstantBufferView(0, j->get()->ConstantBufferView(_current_frame));
+      _command_list->DrawIndexedInstanced(36, 1, 0, 0, 0);    
+    }
+  }
 
   D3D12_RESOURCE_BARRIER rt_present_barrier = {};
   rt_present_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -554,13 +643,14 @@ void RR::Renderer::Render() {
 
   ID3D12CommandList* command_lists[] = {_command_list};
 
-  _command_queue->ExecuteCommandLists(1, command_lists);
-  _command_queue->Signal(_fences[_current_frame], _fence_values[_current_frame]);
+  _fences[_current_frame]->Signal(0);
+  _command_queue->ExecuteCommandLists(sizeof(command_lists) / sizeof(ID3D12CommandList), command_lists);
+  _command_queue->Signal(_fences[_current_frame], 1);
   _swap_chain->Present(0, 0);
 }
 
-void RR::Renderer::Cleanup() { 
-  WaitForFrame();
+void RR::Renderer::Cleanup() {
+  WaitForAllFrames();
 
   if (_device != nullptr) {
     _device->Release();
@@ -587,12 +677,25 @@ void RR::Renderer::Cleanup() {
     _command_list = nullptr;
   }
 
-  for (int i = 0; i < kSwapchainBufferCount; ++i) {
-    if (_render_targets[i] != nullptr) {
-      _render_targets[i]->Release();
-      _render_targets[i] = nullptr;
-    }
+  if (_depth_scentil_buffer != nullptr) {
+    _depth_scentil_buffer->Release();
+    _depth_scentil_buffer = nullptr;
+  } 
+  
+  if (_depth_stencil_descriptor_heap != nullptr) {
+    _depth_stencil_descriptor_heap->Release();
+    _depth_stencil_descriptor_heap = nullptr;
+  }
 
+  for (std::map<uint32_t, GFX::Pipeline>::iterator i = _pipelines.begin(); i != _pipelines.end(); i++) {
+    i->second.Release();
+  }
+
+  for (size_t i = 0; i < _geometries.size(); i++) {
+    _geometries[i].Release();
+  }
+
+  for (uint16_t i = 0; i < kSwapchainBufferCount; ++i) {
     if (_command_allocators[i] != nullptr) {
       _command_allocators[i]->Release();
       _command_allocators[i] = nullptr;
@@ -602,21 +705,25 @@ void RR::Renderer::Cleanup() {
       _fences[i]->Release();
       _fences[i] = nullptr;
     }
-  };
+
+    if (_render_targets[i] != nullptr) {
+      _render_targets[i]->Release();
+      _render_targets[i] = nullptr;
+    }
+  }
 }
 
-void RR::Renderer::WaitForFrame() {
-  HRESULT result;
-
-  _current_frame = _swap_chain->GetCurrentBackBufferIndex();
-
-  if (_fences[_current_frame]->GetCompletedValue() < _fence_values[_current_frame]) {
-
-    result = _fences[_current_frame]->SetEventOnCompletion(
-        _fence_values[_current_frame], _fence_event);
-
+void RR::Renderer::WaitForPreviousFrame() {
+  if (_fences[_current_frame]->GetCompletedValue() != 1) {
+    _fences[_current_frame]->SetEventOnCompletion(1, _fence_event);
     WaitForSingleObject(_fence_event, INFINITE);
   }
+}
 
-  _fence_values[_current_frame]++;
+void RR::Renderer::WaitForAllFrames() { 
+  uint16_t old_frame = _current_frame;
+  for (_current_frame = 0; _current_frame < kSwapchainBufferCount; _current_frame++) {
+    WaitForPreviousFrame();
+  }
+  _current_frame = old_frame;
 }
