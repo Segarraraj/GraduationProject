@@ -473,7 +473,7 @@ void RR::Renderer::InternalUpdate() {
                  i->first->parent->GetComponent(
                      ComponentTypes::kComponentType_WorldTransform));
 
-         world = DirectX::XMLoadFloat4x4(&parent_world->world) * world;
+         world = world * DirectX::XMLoadFloat4x4(&parent_world->world);
        }
 
        DirectX::XMStoreFloat4x4(&i->second->world, world);

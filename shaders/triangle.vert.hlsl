@@ -17,6 +17,6 @@ struct VertexOutput {
 VertexOutput main(VertexInput input) {
   VertexOutput output;
   output.position = mul(float4(input.position, 1.0f), mul(model, mul(view, projection)));
-  output.color = input.color;
+  output.color = (input.color + 1.0f) * 0.5f;
   return output;
 }

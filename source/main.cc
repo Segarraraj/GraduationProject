@@ -3,16 +3,30 @@
 #include "renderer/entity.h"
 #include "renderer/components/entity_component.h"
 #include "renderer/components/local_transform_component.h"
+#include "renderer/components/renderer_component.h"
 #include "renderer/common.hpp"
 
 static struct UserData {
   RR::Renderer* renderer;
-  std::shared_ptr<RR::Entity> cube1;
-  std::shared_ptr<RR::Entity> cube2;
+  std::shared_ptr<RR::Entity> cube1 = nullptr;
+  std::shared_ptr<RR::Entity> cube2 = nullptr;
 };
 
 static void update(void* user_data) { 
-  UserData* data;
+  UserData* data = (UserData*) user_data;
+
+  std::shared_ptr<RR::LocalTransform> transform =
+      std::static_pointer_cast<RR::LocalTransform>(
+          data->cube1->GetComponent(RR::kComponentType_LocalTransform));
+
+  transform->rotation.y = data->renderer->elapsed_time * 0.05f;
+
+  transform = std::static_pointer_cast<RR::LocalTransform>(
+      data->cube2->GetComponent(RR::kComponentType_LocalTransform));
+  float scale = cosf(data->renderer->elapsed_time * 0.001f);
+  scale = (scale - -1.0f) / (1.0f - -1.0f) * (.6f - .4f) + .4f;
+  transform->scale = {scale, scale, scale};
+  transform->rotation.z = data->renderer->elapsed_time * 0.25f;
 }
 
 int main(int argc, char** argv) {
@@ -25,8 +39,8 @@ int main(int argc, char** argv) {
   }
 
   data.renderer = &renderer;
-  data.cube1 = renderer.RegisterEntity(0);
-  data.cube2 = renderer.RegisterEntity(0);
+  data.cube1 = renderer.RegisterEntity(RR::ComponentTypes::kComponentType_Renderer);
+  data.cube2 = renderer.RegisterEntity(RR::ComponentTypes::kComponentType_Renderer);
 
   std::shared_ptr<RR::LocalTransform> transform =
       std::static_pointer_cast<RR::LocalTransform>(
@@ -49,40 +63,40 @@ int main(int argc, char** argv) {
   // Create vertex buffer
   float vertex_list[] = {
       // front face
-      -1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
-      1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 1.0f,
-      -1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f,
-      1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+      -1.0f,  1.0f, -1.0f, 0.0f, 0.0f, -1.0f,
+       1.0f, -1.0f, -1.0f, 0.0f, 0.0f, -1.0f,
+      -1.0f, -1.0f, -1.0f, 0.0f, 0.0f, -1.0f,
+       1.0f,  1.0f, -1.0f, 0.0f, 0.0f, -1.0f,
 
       // right side face
       1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
-      1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-      1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-      1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+      1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 0.0f,
+      1.0f, -1.0f,  1.0f, 1.0f, 0.0f, 0.0f,
+      1.0f,  1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
 
       // left side face
-      -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-      -1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 1.0f,
-      -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-      -1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+      -1.0f,  1.0f,  1.0f, -1.0f, 0.0f, 0.0f,
+      -1.0f, -1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
+      -1.0f, -1.0f,  1.0f, -1.0f, 0.0f, 0.0f,
+      -1.0f,  1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
 
       // back face
-      1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-      -1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-      1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-      -1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+       1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+      -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+       1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+      -1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
 
       // top face
-      -1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
-      1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-      1.0f, 1.0f, -1.0f, 0.0f, 0.0f, 1.0f,
-      -1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+      -1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+       1.0f, 1.0f,  1.0f, 0.0f, 1.0f, 0.0f,
+       1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+      -1.0f, 1.0f,  1.0f, 0.0f, 1.0f, 0.0f,
 
       // bottom face
-      1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-      -1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 1.0f,
-      1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f,
-      -1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+       1.0f, -1.0f,  1.0f, 0.0f, -1.0f, 0.0f,
+      -1.0f, -1.0f, -1.0f, 0.0f, -1.0f, 0.0f,
+       1.0f, -1.0f, -1.0f, 0.0f, -1.0f, 0.0f,
+      -1.0f, -1.0f,  1.0f, 0.0f, -1.0f, 0.0f,
   };
 
   uint32_t indices[] = {
@@ -117,8 +131,15 @@ int main(int argc, char** argv) {
   gdata->vertex_size = sizeof(vertex_list);
   gdata->index_size = sizeof(indices);
 
-  renderer.CreateGeometry(RR::GeometryTypes::kGeometryType_Positions_Normals,
+  int geometry = renderer.CreateGeometry(RR::GeometryTypes::kGeometryType_Positions_Normals,
                           gdata);
+
+   std::static_pointer_cast<RR::RendererComponent>(
+       data.cube1->GetComponent(RR::kComponentType_Renderer))
+       ->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR, geometry);
+   std::static_pointer_cast<RR::RendererComponent>(
+       data.cube2->GetComponent(RR::kComponentType_Renderer))
+       ->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR, geometry);
 
   renderer.Start();
 
