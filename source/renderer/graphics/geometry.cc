@@ -117,14 +117,12 @@ int RR::GFX::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::s
   _new_data = data;
 
   _vertex_buffer_view = std::make_unique<D3D12_VERTEX_BUFFER_VIEW>();
-  _vertex_buffer_view->BufferLocation =
-      _vertex_default_buffer->GetGPUVirtualAddress();
+  _vertex_buffer_view->BufferLocation = _vertex_default_buffer->GetGPUVirtualAddress();
   _vertex_buffer_view->SizeInBytes = data->vertex_size;
   _vertex_buffer_view->StrideInBytes = Stride();
 
   _index_buffer_view = std::make_unique<D3D12_INDEX_BUFFER_VIEW>();
-  _index_buffer_view->BufferLocation =
-      _index_default_buffer->GetGPUVirtualAddress();
+  _index_buffer_view->BufferLocation = _index_default_buffer->GetGPUVirtualAddress();
   _index_buffer_view->SizeInBytes = data->index_size;
   _index_buffer_view->Format = DXGI_FORMAT_R32_UINT;
 

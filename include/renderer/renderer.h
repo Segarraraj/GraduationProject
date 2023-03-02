@@ -32,6 +32,7 @@ class Entity;
 class Camera;
 struct GeometryData;
 namespace GFX {
+class Texture;
 class Pipeline;
 class Geometry;
 }
@@ -59,6 +60,7 @@ class Renderer {
   std::shared_ptr<Entity> MainCamera() const;
   std::shared_ptr<Entity> RegisterEntity(uint32_t component_types);
   int32_t CreateGeometry(uint32_t geometry_type, std::shared_ptr<GeometryData> data);
+  int32_t LoadTexture(const wchar_t* file_name);
 
  private:
   static const uint16_t kSwapchainBufferCount = 3;
@@ -67,6 +69,7 @@ class Renderer {
   std::shared_ptr<Entity> _main_camera;
 
   std::vector<GFX::Geometry> _geometries;
+  std::vector<GFX::Texture> _textures;
   std::map<uint32_t, GFX::Pipeline> _pipelines;
 
   // This is memory acces mayhem, 0 cache hits

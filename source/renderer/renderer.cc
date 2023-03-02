@@ -10,11 +10,11 @@
 
 #include <chrono>
 
-#include "utils.hpp"
 #include "renderer/common.hpp"
 #include "renderer/window.h"
 #include "renderer/logger.h"
 #include "renderer/entity.h"
+#include "renderer/graphics/texture.h"
 #include "renderer/graphics/pipeline.h"
 #include "renderer/graphics/geometry.h"
 #include "renderer/components/camera_component.h"
@@ -66,6 +66,7 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   _main_camera = RegisterEntity(ComponentTypes::kComponentType_Camera);
 
   _geometries = std::vector<GFX::Geometry>(20);
+  _textures = std::vector<GFX::Texture>(20);
 
   HRESULT result;
 
@@ -299,11 +300,12 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   LOG_DEBUG("RR", "Initializing pipelines");
   _pipelines[RR::PipelineTypes::kPipelineType_PBR] = RR::GFX::Pipeline();
   _pipelines[RR::PipelineTypes::kPipelineType_PBR].Init(
-      _device, kPipelineType_PBR, kGeometryType_Positions_Normals);
+      _device, kPipelineType_PBR, kGeometryType_Positions_Normals_UV);
 
   printf("\n");
   LOG_DEBUG("RR", "Renderer initialized");
   LOG_DEBUG("RR", "    Available geometries: %i", _geometries.size());
+  LOG_DEBUG("RR", "    Available textures: %i", _textures.size());
   return 0;
 }
 
@@ -377,7 +379,6 @@ std::shared_ptr<RR::Entity> RR::Renderer::RegisterEntity(
 }
 
 int32_t RR::Renderer::CreateGeometry(uint32_t geometry_type, std::shared_ptr<GeometryData> data) {
-
   for (size_t i = 0; i < _geometries.size(); i++) {
     if (_geometries[i].Initialized()) {
       continue;
@@ -390,16 +391,37 @@ int32_t RR::Renderer::CreateGeometry(uint32_t geometry_type, std::shared_ptr<Geo
   return -1;
 }
 
+int32_t RR::Renderer::LoadTexture(const wchar_t* file_name) {
+  for (size_t i = 0; i < _textures.size(); i++) {
+    if (_textures[i].Initialized()) {
+      continue;
+    }
+
+    _textures[i].Init(_device, file_name);
+    return i;
+  }
+
+  return -1;
+}
+
 void RR::Renderer::UpdateGraphicResources() { 
   size_t i = 0;
-  bool update = false;
-  for (; i < _geometries.size() && !update; i++) {
+  size_t j = 0;
+  bool update_geometries = false;
+  bool update_textures = false;
+  for (; i < _geometries.size() && !update_geometries; i++) {
     if (!_geometries[i].Updated() && _geometries[i].Initialized()) {
-      update = true;
+      update_geometries = true;
     }
   }
 
-  if (!update) {
+  for (; j < _textures.size() && !update_textures; j++) {
+    if (!_textures[j].Updated() && _textures[j].Initialized()) {
+      update_textures = true;
+    }
+  }
+
+  if (!update_geometries && !update_textures) {
     return;
   }
 
@@ -411,6 +433,12 @@ void RR::Renderer::UpdateGraphicResources() {
   for (i = i - 1; i < _geometries.size(); i++) {
     if (!_geometries[i].Updated() && _geometries[i].Initialized()) {
       _geometries[i].Update(_command_list);
+    }
+  }
+
+  for (j = j - 1; j < _textures.size(); j++) {
+    if (!_textures[j].Updated() && _textures[j].Initialized()) {
+      _textures[j].Update(_device, _command_list);
     }
   }
 
@@ -609,16 +637,34 @@ void RR::Renderer::UpdatePipeline() {
     for (std::list<std::shared_ptr<RendererComponent>>::iterator j = i->second.begin();
          j != i->second.end(); j++) {
 
+      if (j->get()->geometry < 0 || j->get()->geometry > _geometries.size()) {
+        LOG_WARNING("RR", "Renderer has invalid geometry");
+        continue;
+      }
 
       if (pipeline.GeometryType() != _geometries[j->get()->geometry].Type()) {
         LOG_WARNING("RR", "Traying to draw geometry with incompatible pipeline");
         continue;
       }
 
+      if (!j->get()->_resource_views_created) {
+        j->get()->CreateResourceViews(_device, _textures);
+      }
+
       _command_list->IASetVertexBuffers( 0, 1, _geometries[j->get()->geometry].VertexView());
       _command_list->IASetIndexBuffer(_geometries[j->get()->geometry].IndexView());
-      _command_list->SetGraphicsRootConstantBufferView(0, j->get()->ConstantBufferView(_current_frame));
-      _command_list->DrawIndexedInstanced(36, 1, 0, 0, 0);    
+      
+      switch (i->first) { 
+        case RR::PipelineTypes::kPipelineType_PBR:
+          _command_list->SetGraphicsRootConstantBufferView(0, j->get()->ConstantBufferView(_current_frame));
+          ID3D12DescriptorHeap* descriptor_heaps[] = {j->get()->_descriptor_heap};
+          _command_list->SetDescriptorHeaps(1, descriptor_heaps);
+          _command_list->SetGraphicsRootDescriptorTable(1, (*descriptor_heaps)->GetGPUDescriptorHandleForHeapStart());
+          break;
+      }
+      
+      _command_list->DrawIndexedInstanced(_geometries[j->get()->geometry].Indices(), 1, 0,
+                                          0, 0);    
     }
   }
 
@@ -718,6 +764,8 @@ void RR::Renderer::WaitForPreviousFrame() {
     _fences[_current_frame]->SetEventOnCompletion(1, _fence_event);
     WaitForSingleObject(_fence_event, INFINITE);
   }
+
+  LPCWSTR a;
 }
 
 void RR::Renderer::WaitForAllFrames() { 

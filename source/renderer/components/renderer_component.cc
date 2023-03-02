@@ -4,6 +4,7 @@
 
 #include "renderer/logger.h"
 #include "renderer/renderer.h"
+#include "renderer/graphics/texture.h"
 
 void RR::RendererComponent::Init(const Renderer* renderer,
                                  uint32_t pipeline_type, int geometry) {
@@ -46,9 +47,33 @@ void RR::RendererComponent::Init(const Renderer* renderer,
         IID_PPV_ARGS(&_constant_buffers[i]));
   }
 
+  D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
+  heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+  heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+
+  switch (pipeline_type) {
+    case RR::PipelineTypes::kPipelineType_PBR:
+      heap_desc.NumDescriptors = 1;
+      break;
+  }
+
+  renderer->_device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&_descriptor_heap));
+
   _initialized = true;
   _pipeline_type = pipeline_type;
   this->geometry = geometry;
+}
+
+void RR::RendererComponent::CreateResourceViews(
+    ID3D12Device* device, std::vector<GFX::Texture>& textures) {
+  switch (_pipeline_type) {
+    case RR::PipelineTypes::kPipelineType_PBR:
+      textures[settings.pbr_settings.texture].CreateResourceView(
+          device, _descriptor_heap->GetCPUDescriptorHandleForHeapStart());
+      break;
+  }
+
+  _resource_views_created = true;
 }
 
 uint64_t RR::RendererComponent::ConstantBufferView(uint32_t frame) {

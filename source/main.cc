@@ -42,6 +42,8 @@ int main(int argc, char** argv) {
   data.cube1 = renderer.RegisterEntity(RR::ComponentTypes::kComponentType_Renderer);
   data.cube2 = renderer.RegisterEntity(RR::ComponentTypes::kComponentType_Renderer);
 
+  int32_t texture = renderer.LoadTexture(L"../../resources/texture1.jpg");
+
   std::shared_ptr<RR::LocalTransform> transform =
       std::static_pointer_cast<RR::LocalTransform>(
           data.cube2->GetComponent(RR::kComponentType_LocalTransform));
@@ -63,40 +65,40 @@ int main(int argc, char** argv) {
   // Create vertex buffer
   float vertex_list[] = {
       // front face
-      -1.0f,  1.0f, -1.0f, 0.0f, 0.0f, -1.0f,
-       1.0f, -1.0f, -1.0f, 0.0f, 0.0f, -1.0f,
-      -1.0f, -1.0f, -1.0f, 0.0f, 0.0f, -1.0f,
-       1.0f,  1.0f, -1.0f, 0.0f, 0.0f, -1.0f,
+      -1.0f,  1.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f,
+       1.0f, -1.0f, -1.0f, 0.0f, 0.0f, -1.0f, 1.0f, 1.0f,
+      -1.0f, -1.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f,
+       1.0f,  1.0f, -1.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0.0f,
 
       // right side face
-      1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
-      1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 0.0f,
-      1.0f, -1.0f,  1.0f, 1.0f, 0.0f, 0.0f,
-      1.0f,  1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
+      1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+      1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+      1.0f, -1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f,
+      1.0f,  1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
 
       // left side face
-      -1.0f,  1.0f,  1.0f, -1.0f, 0.0f, 0.0f,
-      -1.0f, -1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
-      -1.0f, -1.0f,  1.0f, -1.0f, 0.0f, 0.0f,
-      -1.0f,  1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
+      -1.0f,  1.0f,  1.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+      -1.0f, -1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f,
+      -1.0f, -1.0f,  1.0f, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+      -1.0f,  1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
 
       // back face
-       1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-      -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-       1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-      -1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+       1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+      -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
+       1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+      -1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f,
 
       // top face
-      -1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-       1.0f, 1.0f,  1.0f, 0.0f, 1.0f, 0.0f,
-       1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-      -1.0f, 1.0f,  1.0f, 0.0f, 1.0f, 0.0f,
+      -1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+       1.0f, 1.0f,  1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+       1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+      -1.0f, 1.0f,  1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
 
       // bottom face
-       1.0f, -1.0f,  1.0f, 0.0f, -1.0f, 0.0f,
-      -1.0f, -1.0f, -1.0f, 0.0f, -1.0f, 0.0f,
-       1.0f, -1.0f, -1.0f, 0.0f, -1.0f, 0.0f,
-      -1.0f, -1.0f,  1.0f, 0.0f, -1.0f, 0.0f,
+       1.0f, -1.0f,  1.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+      -1.0f, -1.0f, -1.0f, 0.0f, -1.0f, 0.0f, 1.0f, 1.0f,
+       1.0f, -1.0f, -1.0f, 0.0f, -1.0f, 0.0f, 0.0f, 1.0f,
+      -1.0f, -1.0f,  1.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f
   };
 
   uint32_t indices[] = {
@@ -131,7 +133,7 @@ int main(int argc, char** argv) {
   gdata->vertex_size = sizeof(vertex_list);
   gdata->index_size = sizeof(indices);
 
-  int geometry = renderer.CreateGeometry(RR::GeometryTypes::kGeometryType_Positions_Normals,
+  int geometry = renderer.CreateGeometry(RR::GeometryTypes::kGeometryType_Positions_Normals_UV,
                           gdata);
 
    std::static_pointer_cast<RR::RendererComponent>(
@@ -140,6 +142,17 @@ int main(int argc, char** argv) {
    std::static_pointer_cast<RR::RendererComponent>(
        data.cube2->GetComponent(RR::kComponentType_Renderer))
        ->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR, geometry);
+
+   std::shared_ptr<RR::RendererComponent> rendererc =
+       std::static_pointer_cast<RR::RendererComponent>(
+           data.cube1->GetComponent(RR::kComponentType_Renderer));
+
+   rendererc->settings.pbr_settings.texture = texture;
+
+   rendererc =
+       std::static_pointer_cast<RR::RendererComponent>(
+           data.cube2->GetComponent(RR::kComponentType_Renderer));
+   rendererc->settings.pbr_settings.texture = texture;
 
   renderer.Start();
 

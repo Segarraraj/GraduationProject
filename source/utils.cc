@@ -1,13 +1,10 @@
-#ifndef __UTILS_H__
-#define __UTILS_H__ 1
+#include "utils.h"
 
-#include <vector>
 #include <fstream>
 
 #include <renderer/logger.h>
 
-namespace Utils {
-std::vector<char> ReadFile(const char* file_name) {
+std::vector<char> Utils::ReadFile(const char* file_name) {
   std::ifstream file =
       std::ifstream(file_name, std::ios::ate | std::ios::binary);
 
@@ -25,6 +22,3 @@ std::vector<char> ReadFile(const char* file_name) {
 
   return buffer;
 }
-}
-
-#endif  // !__UTILS_H__
