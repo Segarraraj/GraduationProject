@@ -80,10 +80,10 @@ int main(int argc, char** argv) {
   camera->farZ = 500.0f;
   camera->nearZ - 0.001f;
 
-  transform->position = {0.0f, 2.0f, 100.0f};
+  transform->position = {0.0f, 0.0f, 0.0f};
   transform->rotation = {0.0f, 0.0f, 0.0f};
 
-  renderer.LoadFBXScene("../../resources/CarScene.fbx");
+  renderer.LoadFBXScene("../../resources/hollow-knight/source/HollowKnight.fbx");
 
   renderer.Start();
 

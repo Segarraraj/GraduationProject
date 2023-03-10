@@ -498,6 +498,9 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
   fread(content, 1, file_size, file);
   ofbx::IScene* scene = ofbx::load((ofbx::u8*)content, file_size,
                        (ofbx::u64)ofbx::LoadFlags::TRIANGULATE);
+
+  char texture_name[128] = {0};
+  wchar_t real_texture_name[128] = {0};
   
   if (scene != nullptr) {
     int mesh_count = scene->getMeshCount();
@@ -523,22 +526,22 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
       data->index_data.resize(index_count);
       data->vertex_data.resize(vertex_count * vertex_offset);
 
-      for (int j = 0; j < index_count; j++) {
+      for (uint32_t j = 0; j < index_count; j++) {
         data->index_data[j] = j;
       }
 
       for (int j = 0; j < vertex_count; j++) {
-        data->vertex_data[j * vertex_offset + 0] = vertices[j].x;
-        data->vertex_data[j * vertex_offset + 1] = vertices[j].y;
-        data->vertex_data[j * vertex_offset + 2] = vertices[j].z;
+        data->vertex_data[j * vertex_offset + 0] = (float)vertices[j].x;
+        data->vertex_data[j * vertex_offset + 1] = (float)vertices[j].y;
+        data->vertex_data[j * vertex_offset + 2] = (float)vertices[j].z;
         if (has_normals) {
-          data->vertex_data[j * vertex_offset + 3] = normals[j].x;
-          data->vertex_data[j * vertex_offset + 4] = normals[j].y;
-          data->vertex_data[j * vertex_offset + 5] = normals[j].z;
+          data->vertex_data[j * vertex_offset + 3] = (float)normals[j].x;
+          data->vertex_data[j * vertex_offset + 4] = (float)normals[j].y;
+          data->vertex_data[j * vertex_offset + 5] = (float)normals[j].z;
         }
         if (has_uvs) {
-          data->vertex_data[j * vertex_offset + 6] = uvs[j].x;
-          data->vertex_data[j * vertex_offset + 7] = uvs[j].y;
+          data->vertex_data[j * vertex_offset + 6] = (float)uvs[j].x;
+          data->vertex_data[j * vertex_offset + 7] = 1.0f - (float)uvs[j].y;
         }
       }
 
@@ -555,7 +558,7 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
           (float)world.m[0], (float)world.m[1],
           (float)world.m[2], (float)world.m[3],
 
-          (float)world.m[4], (float)world.m[5],
+          (float)world.m[4], ((float)world.m[5]),
           (float)world.m[6], (float)world.m[7],
 
           (float)world.m[8], (float)world.m[9],
@@ -580,7 +583,26 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
           std::static_pointer_cast<RendererComponent>(entity->GetComponent(
               ComponentTypes::kComponentType_Renderer));
 
-      renderer_component->Init(this, PipelineTypes::kPipelineType_Phong, geometry_handle);
+      const ofbx::Material* material = mesh.getMaterial(0);
+      const ofbx::Texture* texture = nullptr;
+      if (material != nullptr) {
+        texture = material->getTexture(ofbx::Texture::DIFFUSE);
+      }
+
+      int diff = -1;
+      if (texture != nullptr) {
+        texture->getRelativeFileName().toString(texture_name);
+        mbstowcs(real_texture_name, texture_name, 128);
+        diff = LoadTexture(real_texture_name);
+
+        renderer_component->settings.pbr_settings.texture = diff;
+      }
+
+      if (diff == -1) {
+        renderer_component->Init(this, PipelineTypes::kPipelineType_Phong, geometry_handle);
+      } else {
+        renderer_component->Init(this, PipelineTypes::kPipelineType_PBR, geometry_handle);
+      }
     }  
   }
   
