@@ -30,8 +30,17 @@ struct PBRSettings {
   friend class RendererComponent;
 };
 
+struct PhongSettings {
+ private:
+  MVPStruct mvp;
+
+  friend class Renderer;
+  friend class RendererComponent;
+};
+
 union RendererSettings {
   PBRSettings pbr_settings;
+  PhongSettings phong_settings;
 };
 
 class Renderer;
@@ -41,7 +50,6 @@ class RendererComponent : public EntityComponent {
   ~RendererComponent() = default;
 
   void Init(const Renderer* renderer, uint32_t pipeline_type, int geometry);
-  void CreateResourceViews(ID3D12Device* device, std::vector<GFX::Texture>& textures);
 
   RendererSettings settings;
   int32_t geometry = -1;
@@ -56,6 +64,7 @@ class RendererComponent : public EntityComponent {
   
   void Update(const RendererSettings& settings, uint32_t frame);
   uint64_t ConstantBufferView(uint32_t frame); 
+  void CreateResourceViews(ID3D12Device* device, std::vector<GFX::Texture>& textures);
 
   friend class Renderer;
 };

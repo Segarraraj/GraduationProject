@@ -44,6 +44,18 @@ uint32_t RR::Window::height() const {
   return bounds.bottom - bounds.top;
 }
 
+uint32_t RR::Window::screenCenterX() const {
+  RECT bounds;
+  GetWindowRect((HWND)_window, &bounds);
+  return (bounds.right - bounds.left) / 2 + bounds.left;
+}
+
+uint32_t RR::Window::screenCenterY() const { 
+  RECT bounds;
+  GetWindowRect((HWND)_window, &bounds);
+  return (bounds.bottom - bounds.top) / 2 + bounds.top;
+}
+
 float RR::Window::aspectRatio() const {
   RECT bounds;
   GetClientRect((HWND)_window, &bounds);
@@ -51,5 +63,17 @@ float RR::Window::aspectRatio() const {
     return (bounds.right - bounds.left) / (bounds.bottom - bounds.top);
   } else {
     return 1.0f;
+  }
+}
+
+bool RR::Window::isCaptureMouse() const { return _capture_mouse; }
+
+void RR::Window::CaptureMouse() { 
+  _capture_mouse = !_capture_mouse;
+
+  if (_capture_mouse) {
+    SetCapture((HWND)_window);
+  } else {
+    ReleaseCapture();
   }
 }

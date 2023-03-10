@@ -30,6 +30,7 @@ namespace RR {
 class Window;
 class Entity;
 class Camera;
+class Input;
 struct GeometryData;
 namespace GFX {
 class Texture;
@@ -59,14 +60,25 @@ class Renderer {
 
   std::shared_ptr<Entity> MainCamera() const;
   std::shared_ptr<Entity> RegisterEntity(uint32_t component_types);
-  int32_t CreateGeometry(uint32_t geometry_type, std::shared_ptr<GeometryData> data);
+  int32_t CreateGeometry(uint32_t geometry_type, std::unique_ptr<GeometryData>&& data);
   int32_t LoadTexture(const wchar_t* file_name);
+  std::vector<std::shared_ptr<Entity>> LoadFBXScene(const char* filename);
 
+  // input
+  void CaptureMouse();
+  int IsKeyDown(char key);
+  void OverrideKey(char key, int value);
+  void OverrideMouse(int mouse_x, int mouse_y);
+  float MouseXAxis();
+  float MouseYAxis();
+
+  // This should be private but windowproc needs acces to it
  private:
   static const uint16_t kSwapchainBufferCount = 3;
 
   std::unique_ptr<RR::Window> _window;
   std::shared_ptr<Entity> _main_camera;
+  std::unique_ptr<RR::Input> _input;
 
   std::vector<GFX::Geometry> _geometries;
   std::vector<GFX::Texture> _textures;

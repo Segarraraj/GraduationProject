@@ -34,6 +34,9 @@ void RR::RendererComponent::Init(const Renderer* renderer,
     case RR::PipelineTypes::kPipelineType_PBR:
       constant_buffer_desc.Width = (sizeof(RR::MVPStruct) + 255) & ~255;
       break;
+    case RR::PipelineTypes::kPipelineType_Phong:
+      constant_buffer_desc.Width = (sizeof(RR::MVPStruct) + 255) & ~255;
+      break;
   }
 
   _constant_buffers =
@@ -47,17 +50,15 @@ void RR::RendererComponent::Init(const Renderer* renderer,
         IID_PPV_ARGS(&_constant_buffers[i]));
   }
 
-  D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
-  heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-  heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+  if (pipeline_type == RR::PipelineTypes::kPipelineType_PBR) {
+    D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
+    heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    heap_desc.NumDescriptors = 1;
 
-  switch (pipeline_type) {
-    case RR::PipelineTypes::kPipelineType_PBR:
-      heap_desc.NumDescriptors = 1;
-      break;
-  }
-
-  renderer->_device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&_descriptor_heap));
+    renderer->_device->CreateDescriptorHeap(&heap_desc,
+                                            IID_PPV_ARGS(&_descriptor_heap));
+  }  
 
   _initialized = true;
   _pipeline_type = pipeline_type;
@@ -82,16 +83,32 @@ uint64_t RR::RendererComponent::ConstantBufferView(uint32_t frame) {
 
 void RR::RendererComponent::Update(const RendererSettings& settings, uint32_t frame) {
   switch (_pipeline_type) { 
-    case RR::PipelineTypes::kPipelineType_PBR:
+    case RR::PipelineTypes::kPipelineType_PBR: {
       this->settings.pbr_settings.mvp.model = settings.pbr_settings.mvp.model;
       this->settings.pbr_settings.mvp.view = settings.pbr_settings.mvp.view;
-      this->settings.pbr_settings.mvp.projection = settings.pbr_settings.mvp.projection;
+      this->settings.pbr_settings.mvp.projection =
+          settings.pbr_settings.mvp.projection;
+
+      UINT* buffer_start = nullptr;
+
+      _constant_buffers[frame]->Map(0, nullptr,
+                                    reinterpret_cast<void**>(&buffer_start));
+      memcpy(buffer_start, &settings.pbr_settings.mvp, sizeof(RR::MVPStruct));
+      _constant_buffers[frame]->Unmap(0, nullptr);
+      break;
+    }
+    case RR::PipelineTypes::kPipelineType_Phong: {
+      this->settings.phong_settings.mvp.model = settings.phong_settings.mvp.model;
+      this->settings.phong_settings.mvp.view = settings.phong_settings.mvp.view;
+      this->settings.phong_settings.mvp.projection = settings.phong_settings.mvp.projection;
 
       UINT* buffer_start = nullptr;
 
       _constant_buffers[frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
-      memcpy(buffer_start, &settings.pbr_settings.mvp, sizeof(RR::MVPStruct));
+      memcpy(buffer_start, &settings.phong_settings.mvp, sizeof(RR::MVPStruct));
       _constant_buffers[frame]->Unmap(0, nullptr);
       break;
+    }
+
   }
 }

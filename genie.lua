@@ -26,6 +26,7 @@ solution "GraduationProject"
         defines {
       	    "DEBUG",
 	    	"VERBOSE",
+			"MTR_ENABLED"
 		}
 
 		flags {
@@ -36,6 +37,7 @@ solution "GraduationProject"
 		defines {
 	    	"RELEASE",
 	    	"VERBOSE",
+			"MTR_ENABLED"
 		}
 
         buildoptions {
@@ -58,14 +60,19 @@ solution "GraduationProject"
 
 		files {
 			"genie.lua",
-	    	"source/**.cc",
+	    	"src/**.cc",
 	    	"include/**.h",
 			"include/**.hpp",
-			"shaders/**.hlsl"
+			"shaders/**.hlsl",
+			"deps/**.h",
+			"deps/**.c",
+			"deps/**.cc",
+			"deps/**.cpp",
 		}
 
 		includedirs {
 	    	"include",
+			"deps/include"
 		}
 
 	configuration "Debug"

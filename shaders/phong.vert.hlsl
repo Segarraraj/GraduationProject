@@ -12,12 +12,12 @@ struct VertexInput {
 
 struct VertexOutput {
   float4 position : SV_POSITION;
-  float2 uv : UV;
+  float3 normal : NORMAL;
 };
 
 VertexOutput main(VertexInput input) {
   VertexOutput output;
   output.position = mul(float4(input.position, 1.0f), mul(model, mul(view, projection)));
-  output.uv = input.uv;
+  output.normal = input.normal;
   return output;
 }

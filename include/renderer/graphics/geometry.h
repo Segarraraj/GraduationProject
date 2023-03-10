@@ -27,7 +27,7 @@ class Geometry : public GraphicResource {
   const D3D12_INDEX_BUFFER_VIEW* IndexView() const;
 
   int Init(ID3D12Device* device, uint32_t geometry_type,
-           std::shared_ptr<GeometryData> data);
+           std::unique_ptr<GeometryData>&& data);
   int Update(ID3D12GraphicsCommandList* command_list);
 
   void Release() override;
@@ -35,7 +35,7 @@ class Geometry : public GraphicResource {
  private:
   uint32_t _type = 0U;
   uint32_t _indices = 0U;
-  std::shared_ptr<GeometryData> _new_data = nullptr;
+  std::unique_ptr<GeometryData> _new_data = nullptr;
 
   ID3D12Resource* _vertex_default_buffer = nullptr;
   ID3D12Resource* _vertex_upload_buffer = nullptr;

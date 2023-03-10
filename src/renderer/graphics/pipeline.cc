@@ -34,7 +34,7 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
   std::vector<D3D12_STATIC_SAMPLER_DESC> samplers;
 
   switch (type) {
-    case RR::kPipelineType_PBR:
+    case RR::kPipelineType_PBR: {
       parameters = std::vector<D3D12_ROOT_PARAMETER1>(2);
       samplers = std::vector<D3D12_STATIC_SAMPLER_DESC>(1);
 
@@ -52,7 +52,8 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
       table_ranges[0].NumDescriptors = 1;
       table_ranges[0].BaseShaderRegister = 0;
       table_ranges[0].RegisterSpace = 0;
-      table_ranges[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+      table_ranges[0].OffsetInDescriptorsFromTableStart =
+          D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
       D3D12_ROOT_DESCRIPTOR_TABLE1 descriptor_table = {};
       descriptor_table.NumDescriptorRanges = 1;
@@ -75,16 +76,31 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
       samplers[0].ShaderRegister = 0;
       samplers[0].RegisterSpace = 0;
       samplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
       break;
+    }
+      
+    case PipelineTypes::kPipelineType_Phong: {
+      parameters = std::vector<D3D12_ROOT_PARAMETER1>(1);
+      samplers = std::vector<D3D12_STATIC_SAMPLER_DESC>(0);
+
+      D3D12_ROOT_DESCRIPTOR1 parameter1_descriptor = {};
+      parameter1_descriptor.RegisterSpace = 0;
+      parameter1_descriptor.ShaderRegister = 0;
+      parameter1_descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+
+      parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+      parameters[0].Descriptor = parameter1_descriptor;
+      parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+      break;
+    }      
   }  
 
   D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
   root_signature_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
   root_signature_desc.Desc_1_1.NumParameters = parameters.size();
-  root_signature_desc.Desc_1_1.pParameters = &parameters[0];
+  root_signature_desc.Desc_1_1.pParameters = parameters.data();
   root_signature_desc.Desc_1_1.NumStaticSamplers = samplers.size();
-  root_signature_desc.Desc_1_1.pStaticSamplers = &samplers[0];
+  root_signature_desc.Desc_1_1.pStaticSamplers = samplers.data();
   root_signature_desc.Desc_1_1.Flags =
       D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
       D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
@@ -125,6 +141,11 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
                                   nullptr, "main", "vs_5_1", compile_flags, 0,
                                   &vertex_shader, &error);
       break;
+    case RR::PipelineTypes::kPipelineType_Phong:
+      result = D3DCompileFromFile(L"../../shaders/phong.vert.hlsl", nullptr,
+                                  nullptr, "main", "vs_5_1", compile_flags, 0,
+                                  &vertex_shader, &error);
+      break;
   }
 
   if (FAILED(result)) {
@@ -136,6 +157,11 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
   switch (type) {
     case RR::PipelineTypes::kPipelineType_PBR:
       result = D3DCompileFromFile(L"../../shaders/triangle.frag.hlsl", nullptr,
+                                  nullptr, "main", "ps_5_1", compile_flags, 0,
+                                  &fragment_shader, &error);
+      break;
+    case RR::PipelineTypes::kPipelineType_Phong:
+      result = D3DCompileFromFile(L"../../shaders/phong.frag.hlsl", nullptr,
                                   nullptr, "main", "ps_5_1", compile_flags, 0,
                                   &fragment_shader, &error);
       break;
@@ -171,7 +197,7 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
                          0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
       input_layout[1] = {"NORMAL", 0,  DXGI_FORMAT_R32G32B32_FLOAT,
                          0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
-      input_layout[2] = {"TEXCOORD", 0,  DXGI_FORMAT_R32G32_FLOAT, 0, 24,
+      input_layout[2] = {"UV", 0,  DXGI_FORMAT_R32G32_FLOAT, 0, 24,
                          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
       break;
   }

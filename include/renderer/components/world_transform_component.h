@@ -15,6 +15,11 @@ class WorldTransform : public EntityComponent {
   WorldTransform();
   ~WorldTransform() = default;
 
+  DirectX::XMFLOAT3 forward();
+  DirectX::XMFLOAT3 right();
+  DirectX::XMFLOAT3 up();
+
+
   DirectX::XMFLOAT4X4 world;
 };
 }  // namespace RR

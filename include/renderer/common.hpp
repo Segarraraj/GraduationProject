@@ -3,6 +3,8 @@
 
 #include <DirectXMath.h>
 
+#include <vector>
+
 namespace RR {
 enum ComponentTypes : uint32_t {
   kComponentType_None =           0b0000,
@@ -19,15 +21,14 @@ enum GeometryTypes : uint32_t {
 };
 
 struct GeometryData {
-  float* vertex_data;
-  uint32_t* index_data;
-  uint32_t vertex_size;
-  uint32_t index_size;
+  std::vector<float> vertex_data;
+  std::vector<uint32_t> index_data;
 };
 
 enum PipelineTypes : uint32_t {
   kPipelineType_None = 0U,
   kPipelineType_PBR  = 1U,
+  kPipelineType_Phong  = 2U,
 };
 }
 
