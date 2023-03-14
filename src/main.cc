@@ -12,8 +12,6 @@
 
 static struct UserData {
   RR::Renderer* renderer;
-
-  std::shared_ptr<RR::LocalTransform> transform;
 };
 
 static void update(void* user_data) { 
@@ -28,7 +26,6 @@ static void update(void* user_data) {
       std::static_pointer_cast<RR::WorldTransform>(
           data->renderer->MainCamera()->GetComponent(
               RR::kComponentType_WorldTransform));
-
 
   transform->rotation.y += data->renderer->MouseXAxis() * 16.0f;
   transform->rotation.x += data->renderer->MouseYAxis() * 8.0f;
@@ -59,8 +56,6 @@ static void update(void* user_data) {
                              -0.05f * data->renderer->IsKeyDown('A')));
 
   DirectX::XMStoreFloat3(&transform->position, traslation);
-
-  data->transform->rotation.y = data->renderer->elapsed_time * 0.02f;
 }
 
 int main(int argc, char** argv) {
@@ -87,13 +82,7 @@ int main(int argc, char** argv) {
   transform->position = {0.0f, 0.0f, 0.0f};
   transform->rotation = {0.0f, 0.0f, 0.0f};
 
-  std::shared_ptr<RR::Entity> hollow_knight = renderer.LoadFBXScene("../../resources/hollow-knight/source/HollowKnight.fbx")[0];
-  hollow_knight->AddComponents(RR::kComponentType_LocalTransform);
-  
-  data.transform = std::static_pointer_cast<RR::LocalTransform>(
-      hollow_knight->GetComponent(RR::kComponentType_LocalTransform));
-
-  data.transform->scale = {.5f, .5f, .5f};
+  renderer.LoadFBXScene("../../resources/BistroExterior.fbx");
 
   renderer.Start();
 

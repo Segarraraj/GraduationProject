@@ -1,6 +1,7 @@
 struct VertexOutput {
   float4 position : SV_POSITION;
   float3 normal : NORMAL;
+  float3 color : COLOR;
 };
 
 float4 main(VertexOutput input) : SV_TARGET {
@@ -10,7 +11,7 @@ float4 main(VertexOutput input) : SV_TARGET {
   float3 ambient = 0.1f * light_color;
   float diffuse = max(dot(input.normal, directionalLight), 0.0);
 
-  float3 light = (ambient + diffuse * light_color) * float3(131.0f / 255.0f, 131.0f / 255.0f, 131.0f / 255.0f);
+  float3 light = (ambient + diffuse * light_color) * input.color;
 
   return float4(light, 1.0f);
 }

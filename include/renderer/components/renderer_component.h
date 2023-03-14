@@ -33,6 +33,7 @@ struct PBRSettings {
 struct PhongSettings {
  private:
   MVPStruct mvp;
+  float color[3]; 
 
   friend class Renderer;
   friend class RendererComponent;
@@ -58,7 +59,6 @@ class RendererComponent : public EntityComponent {
   bool _initialized = false;
   bool _resource_views_created = false;
 
-  // FIXME: This is dangerous and bad
   std::vector<ID3D12Resource*> _constant_buffers;
   ID3D12DescriptorHeap* _descriptor_heap = nullptr;
   

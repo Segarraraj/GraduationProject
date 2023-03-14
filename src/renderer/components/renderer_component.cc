@@ -35,7 +35,7 @@ void RR::RendererComponent::Init(const Renderer* renderer,
       constant_buffer_desc.Width = (sizeof(RR::MVPStruct) + 255) & ~255;
       break;
     case RR::PipelineTypes::kPipelineType_Phong:
-      constant_buffer_desc.Width = (sizeof(RR::MVPStruct) + 255) & ~255;
+      constant_buffer_desc.Width = (sizeof(RR::PhongSettings) + 255) & ~255;
       break;
   }
 
@@ -105,7 +105,7 @@ void RR::RendererComponent::Update(const RendererSettings& settings, uint32_t fr
       UINT* buffer_start = nullptr;
 
       _constant_buffers[frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
-      memcpy(buffer_start, &settings.phong_settings.mvp, sizeof(RR::MVPStruct));
+      memcpy(buffer_start, &this->settings.phong_settings, sizeof(RR::PhongSettings));
       _constant_buffers[frame]->Unmap(0, nullptr);
       break;
     }
