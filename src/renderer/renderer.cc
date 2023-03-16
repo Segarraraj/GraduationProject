@@ -10,6 +10,7 @@
 #include <windowsx.h>
 
 #include <chrono>
+#include <string>
 
 #include "OpenFBX/ofbx.h"
 #include "Minitrace/minitrace.h"
@@ -98,7 +99,7 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
                                 ComponentTypes::kComponentType_Camera);
 
   _geometries = std::vector<GFX::Geometry>(2000);
-  _textures = std::vector<GFX::Texture>(5000);
+  _textures = std::vector<GFX::Texture>(700);
 
   HRESULT result;
 
@@ -504,146 +505,176 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
                        (ofbx::u64)ofbx::LoadFlags::TRIANGULATE);
 
   char texture_name[128] = {0};
-  wchar_t real_texture_name[128] = {0};
+  wchar_t real_texture_name[256] = {0};
+  std::map<std::string, int> textures;
   
-  if (scene != nullptr) {
-    int mesh_count = scene->getMeshCount();
-    for (int i = 0; i < mesh_count; i++) {
-
-      const ofbx::Mesh& mesh = *scene->getMesh(i);
-      const ofbx::Geometry& geom = *mesh.getGeometry();
-      LOG_DEBUG("RR", "Mesh: %i, %s", mesh.id, mesh.name);
-
-      const ofbx::Vec3* vertices = geom.getVertices();
-      const ofbx::Vec3* normals = geom.getNormals();
-      const ofbx::Vec2* uvs = geom.getUVs();
-      const int* material_indices = geom.getMaterials();
-
-      const char* mesh_name = mesh.name;
-      const char* geo_name = geom.name;
-
-      int index_count = geom.getIndexCount();
-      int vertex_count = geom.getVertexCount();
-      int material_count = mesh.getMaterialCount();
-
-      bool has_normals = normals != nullptr;
-      bool has_uvs = uvs != nullptr;
-
-      ofbx::Matrix world = mesh.getGlobalTransform();
-
-      std::map<int, std::list<std::unique_ptr<GeometryData>>> material_data;
-
-      int vertex_offset = 3 + (has_normals ? 3 : 0) + (has_uvs ? 2 : 0);
-
-      if (material_count != 1) {
-        int material_index = 0;
-        int previous_count = 0;
-        for (int j = 0; j <= index_count / 3; j++) {
-          if (material_indices[j] == material_index && j != index_count / 3) {
-            continue;
-          }
-
-          std::unique_ptr<GeometryData> data = std::make_unique<GeometryData>();
-          data->index_data.resize((j - previous_count) * 3);
-          data->vertex_data.resize(((j - previous_count) * 3) * vertex_offset);
-          
-          material_data[material_index].push_back(std::move(data));
-          
-          material_index = material_indices[j];
-          previous_count = j;
-        }
-      } else {
-        std::unique_ptr<GeometryData> data = std::make_unique<GeometryData>();
-        data->index_data.resize(index_count);
-        data->vertex_data.resize(vertex_count * vertex_offset);
-
-        material_data[0].push_back(std::move(data));
-      }
-
-      int previous_submesh_count = 0;
-      for (std::map<int, std::list<std::unique_ptr<GeometryData>>>::iterator i = 
-        material_data.begin(); i != material_data.end(); i++) {
-        for (std::list<std::unique_ptr<GeometryData>>::iterator data = i->second.begin(); data != i->second.end(); data++) {
-          for (int j = 0; j < data->get()->index_data.size(); j++) {
-            data->get()->index_data[j] = j;
-            data->get()->vertex_data[j * vertex_offset + 0] =
-                (float)vertices[previous_submesh_count + j].x;
-            data->get()->vertex_data[j * vertex_offset + 1] =
-                (float)vertices[previous_submesh_count + j].y;
-            data->get()->vertex_data[j * vertex_offset + 2] =
-                (float)vertices[previous_submesh_count + j].z;
-            if (has_normals) {
-              data->get()->vertex_data[j * vertex_offset + 3] =
-                  (float)normals[previous_submesh_count + j].x;
-              data->get()->vertex_data[j * vertex_offset + 4] =
-                  (float)normals[previous_submesh_count + j].y;
-              data->get()->vertex_data[j * vertex_offset + 5] =
-                  (float)normals[previous_submesh_count + j].z;
-            }
-            if (has_uvs) {
-              data->get()->vertex_data[j * vertex_offset + 6] =
-                  (float)uvs[previous_submesh_count + j].x;
-              data->get()->vertex_data[j * vertex_offset + 7] =
-                  1.0f - (float)uvs[previous_submesh_count + j].y;
-            }
-          }
-
-          previous_submesh_count += data->get()->index_data.size();
-
-          std::shared_ptr<Entity> entity =
-              RegisterEntity(ComponentTypes::kComponentType_WorldTransform | 
-                             ComponentTypes::kComponentType_Renderer);
-          entities.push_back(entity);
-
-          std::shared_ptr<WorldTransform> transform =
-              std::static_pointer_cast<WorldTransform>(entity->GetComponent(
-                  ComponentTypes::kComponentType_WorldTransform));
-
-          DirectX::XMMATRIX matrix((float)world.m[0], (float)world.m[1],
-                                   (float)world.m[2], (float)world.m[3],
-
-                                   (float)world.m[4], ((float)world.m[5]),
-                                   (float)world.m[6], (float)world.m[7],
-
-                                   (float)world.m[8], (float)world.m[9],
-                                   (float)world.m[10], (float)world.m[11],
-
-                                   (float)world.m[12], (float)world.m[13],
-                                   (float)world.m[14], (float)world.m[15]);
-
-          DirectX::XMStoreFloat4x4(&transform->world, matrix);
-
-          uint32_t geometry_type = GeometryTypes::kGeometryType_None;
-
-          if (has_normals && has_uvs) {
-            geometry_type = GeometryTypes::kGeometryType_Positions_Normals_UV;
-          } else if (has_normals) {
-            geometry_type = GeometryTypes::kGeometryType_Positions_Normals;
-          }
-
-          int geometry_handle =
-              CreateGeometry(geometry_type, std::move(*data));
-
-          std::shared_ptr<RendererComponent> renderer_component =
-              std::static_pointer_cast<RendererComponent>(entity->GetComponent(
-                  ComponentTypes::kComponentType_Renderer));
-
-          const ofbx::Material* material = mesh.getMaterial(i->first);
-          float color_component = 1.0f - (1.0f / 8.0f) * i->first;
-          float color[] = {color_component, color_component, color_component};
-          memcpy(renderer_component->settings.phong_settings.color, color,
-                 sizeof(color));
-
-          renderer_component->Init(this, PipelineTypes::kPipelineType_Phong,
-              geometry_handle);
-        }
-      }
-    }  
-  }
-  
-  scene->destroy();
   delete[] content;
   fclose(file);
+
+  if (scene == nullptr) {
+    return entities;
+  }
+  
+  int mesh_count = scene->getMeshCount();
+  const ofbx::GlobalSettings* settings = scene->getGlobalSettings();
+  for (int i = 0; i < mesh_count; i++) {
+    const ofbx::Mesh& mesh = *scene->getMesh(i);
+    const ofbx::Geometry& geom = *mesh.getGeometry();
+    LOG_DEBUG("RR", "Mesh %i/%i: %s", i, mesh_count, mesh.name);
+
+    const ofbx::Vec3* vertices = geom.getVertices();
+    const ofbx::Vec3* normals = geom.getNormals();
+    const ofbx::Vec2* uvs = geom.getUVs();
+    const int* material_indices = geom.getMaterials();
+
+    const char* mesh_name = mesh.name;
+    const char* geo_name = geom.name;
+
+    int index_count = geom.getIndexCount();
+    int vertex_count = geom.getVertexCount();
+    int material_count = mesh.getMaterialCount();
+
+    bool has_normals = normals != nullptr;
+    bool has_uvs = uvs != nullptr;
+
+    ofbx::Matrix world = mesh.getGlobalTransform();
+
+    std::map<int, std::list<std::unique_ptr<GeometryData>>> material_data;
+
+    int vertex_offset = 3 + (has_normals ? 3 : 0) + (has_uvs ? 2 : 0);
+
+    if (material_count != 1) {
+      int material_index = 0;
+      int previous_count = 0;
+      for (int j = 0; j <= index_count / 3; j++) {
+        if (material_indices[j] == material_index && j != index_count / 3) {
+          continue;
+        }
+
+        std::unique_ptr<GeometryData> data = std::make_unique<GeometryData>();
+        data->index_data.resize((j - previous_count) * 3);
+        data->vertex_data.resize(((j - previous_count) * 3) * vertex_offset);
+
+        material_data[material_index].push_back(std::move(data));
+
+        material_index = material_indices[j];
+        previous_count = j;
+      }
+    } else {
+      std::unique_ptr<GeometryData> data = std::make_unique<GeometryData>();
+      data->index_data.resize(index_count);
+      data->vertex_data.resize(vertex_count * vertex_offset);
+
+      material_data[0].push_back(std::move(data));
+    }
+
+    int previous_submesh_count = 0;
+    for (std::map<int, std::list<std::unique_ptr<GeometryData>>>::iterator i =
+             material_data.begin();
+         i != material_data.end(); i++) {
+      for (std::list<std::unique_ptr<GeometryData>>::iterator data =
+               i->second.begin();
+           data != i->second.end(); data++) {
+        for (int j = 0; j < data->get()->index_data.size(); j++) {
+          data->get()->index_data[j] = j;
+          data->get()->vertex_data[j * vertex_offset + 0] =
+              (float)vertices[previous_submesh_count + j].x;
+          data->get()->vertex_data[j * vertex_offset + 1] =
+              (float)vertices[previous_submesh_count + j].y;
+          data->get()->vertex_data[j * vertex_offset + 2] =
+              (float)vertices[previous_submesh_count + j].z;
+          if (has_normals) {
+            data->get()->vertex_data[j * vertex_offset + 3] =
+                (float)normals[previous_submesh_count + j].x;
+            data->get()->vertex_data[j * vertex_offset + 4] =
+                (float)normals[previous_submesh_count + j].y;
+            data->get()->vertex_data[j * vertex_offset + 5] =
+                (float)normals[previous_submesh_count + j].z;
+          }
+          if (has_uvs) {
+            data->get()->vertex_data[j * vertex_offset + 6] =
+                (float)uvs[previous_submesh_count + j].x;
+            data->get()->vertex_data[j * vertex_offset + 7] =
+                1.0f - (float)uvs[previous_submesh_count + j].y;
+          }
+        }
+
+        previous_submesh_count += data->get()->index_data.size();
+
+        std::shared_ptr<Entity> entity =
+            RegisterEntity(ComponentTypes::kComponentType_WorldTransform |
+                           ComponentTypes::kComponentType_Renderer);
+        entities.push_back(entity);
+
+        std::shared_ptr<WorldTransform> transform =
+            std::static_pointer_cast<WorldTransform>(entity->GetComponent(
+                ComponentTypes::kComponentType_WorldTransform));
+
+        DirectX::XMMATRIX matrix((float)world.m[0], (float)world.m[1],
+                                 (float)world.m[2], (float)world.m[3],
+
+                                 (float)world.m[4], ((float)world.m[5]),
+                                 (float)world.m[6], (float)world.m[7],
+
+                                 (float)world.m[8], (float)world.m[9],
+                                 (float)world.m[10], (float)world.m[11],
+
+                                 (float)world.m[12], (float)world.m[13],
+                                 (float)world.m[14], (float)world.m[15]);
+
+        DirectX::XMStoreFloat4x4(&transform->world, matrix);
+
+        uint32_t geometry_type = GeometryTypes::kGeometryType_None;
+
+        if (has_normals && has_uvs) {
+          geometry_type = GeometryTypes::kGeometryType_Positions_Normals_UV;
+        } else if (has_normals) {
+          geometry_type = GeometryTypes::kGeometryType_Positions_Normals;
+        }
+
+        int geometry_handle = CreateGeometry(geometry_type, std::move(*data));
+
+        std::shared_ptr<RendererComponent> renderer_component =
+            std::static_pointer_cast<RendererComponent>(
+                entity->GetComponent(ComponentTypes::kComponentType_Renderer));
+
+        const ofbx::Material* material = mesh.getMaterial(i->first);
+        if (material != nullptr) {
+          const ofbx::Texture* texture =
+              material->getTexture(ofbx::Texture::DIFFUSE);
+          if (texture != nullptr) {
+            texture->getRelativeFileName().toString(texture_name);
+
+            int texture_handle = -1;
+            std::string texture_key = texture_name;
+            if (textures.count(texture_key) == 1) {
+              texture_handle = textures[texture_name];
+            } else {
+              char resources[256] = "../../resources/\0";
+              char* appended_name = strcat(resources, texture_name);
+              mbstowcs(real_texture_name, appended_name, 256);
+              texture_handle = LoadTexture(real_texture_name);
+              ZeroMemory(real_texture_name, 256);
+              textures[texture_key] = texture_handle;
+            }
+
+            renderer_component->settings.pbr_settings.texture = texture_handle;
+          }
+        }
+
+        //          float color_component = 1.0f - (1.0f / 8.0f) * i->first;
+        // float color[] = {color_component, color_component, color_component};
+        // memcpy(renderer_component->settings.phong_settings.color, color,
+        //       sizeof(color));
+        renderer_component->Init(this, PipelineTypes::kPipelineType_PBR,
+                                 geometry_handle);
+      }
+    }
+
+    UpdateGraphicResources();
+  }
+
+  scene->destroy();  
 
   MTR_END("Renderer", "Load FBX scene");
 
@@ -971,18 +1002,17 @@ void RR::Renderer::UpdatePipeline() {
 
       _command_list->IASetVertexBuffers( 0, 1, _geometries[j->get()->geometry].VertexView());
       _command_list->IASetIndexBuffer(_geometries[j->get()->geometry].IndexView());
+      _command_list->SetGraphicsRootConstantBufferView(0, j->get()->ConstantBufferView(_current_frame));
       
       
       switch (i->first) { 
         case RR::PipelineTypes::kPipelineType_PBR: {
-          _command_list->SetGraphicsRootConstantBufferView(0, j->get()->ConstantBufferView(_current_frame));
           ID3D12DescriptorHeap* descriptor_heaps[] = {j->get()->_descriptor_heap};
           _command_list->SetDescriptorHeaps(1, descriptor_heaps);
-          _command_list->SetGraphicsRootDescriptorTable(1, (*descriptor_heaps)->GetGPUDescriptorHandleForHeapStart());
+          _command_list->SetGraphicsRootDescriptorTable(1, descriptor_heaps[0]->GetGPUDescriptorHandleForHeapStart());
           break;
         }          
         case RR::PipelineTypes::kPipelineType_Phong: {
-          _command_list->SetGraphicsRootConstantBufferView(0, j->get()->ConstantBufferView(_current_frame));
           break;        
         }
       }

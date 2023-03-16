@@ -86,13 +86,11 @@ void RR::RendererComponent::Update(const RendererSettings& settings, uint32_t fr
     case RR::PipelineTypes::kPipelineType_PBR: {
       this->settings.pbr_settings.mvp.model = settings.pbr_settings.mvp.model;
       this->settings.pbr_settings.mvp.view = settings.pbr_settings.mvp.view;
-      this->settings.pbr_settings.mvp.projection =
-          settings.pbr_settings.mvp.projection;
+      this->settings.pbr_settings.mvp.projection = settings.pbr_settings.mvp.projection;
 
       UINT* buffer_start = nullptr;
 
-      _constant_buffers[frame]->Map(0, nullptr,
-                                    reinterpret_cast<void**>(&buffer_start));
+      _constant_buffers[frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
       memcpy(buffer_start, &settings.pbr_settings.mvp, sizeof(RR::MVPStruct));
       _constant_buffers[frame]->Unmap(0, nullptr);
       break;

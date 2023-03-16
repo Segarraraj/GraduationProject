@@ -183,9 +183,10 @@ int RR::GFX::Geometry::Update(ID3D12GraphicsCommandList* command_list) {
 
   _updated = true;
 
-  _new_data->vertex_data.resize(0);
-  _new_data->index_data.resize(0);
+  _new_data->vertex_data = std::vector<float>(0);
+  _new_data->index_data = std::vector<uint32_t>(0);
   _new_data.release();
+  _new_data.reset();
 
   return 0;
 }

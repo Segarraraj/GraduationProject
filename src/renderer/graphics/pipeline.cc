@@ -64,9 +64,9 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
       parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
       samplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-      samplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-      samplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-      samplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+      samplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+      samplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+      samplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
       samplers[0].MipLODBias = 0;
       samplers[0].MaxAnisotropy = 0;
       samplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
@@ -137,7 +137,7 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
 
   switch (type) { 
     case RR::PipelineTypes::kPipelineType_PBR:
-      result = D3DCompileFromFile(L"../../shaders/triangle.vert.hlsl", nullptr,
+      result = D3DCompileFromFile(L"../../shaders/pbr.vert.hlsl", nullptr,
                                   nullptr, "main", "vs_5_1", compile_flags, 0,
                                   &vertex_shader, &error);
       break;
@@ -156,7 +156,7 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
 
   switch (type) {
     case RR::PipelineTypes::kPipelineType_PBR:
-      result = D3DCompileFromFile(L"../../shaders/triangle.frag.hlsl", nullptr,
+      result = D3DCompileFromFile(L"../../shaders/pbr.frag.hlsl", nullptr,
                                   nullptr, "main", "ps_5_1", compile_flags, 0,
                                   &fragment_shader, &error);
       break;

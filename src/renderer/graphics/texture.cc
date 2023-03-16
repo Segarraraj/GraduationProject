@@ -316,6 +316,8 @@ int RR::GFX::Texture::Init(ID3D12Device* device, const wchar_t* file_name) {
       D3D12_RESOURCE_STATE_COMMON, nullptr,
       IID_PPV_ARGS(&_default_buffer));
 
+  _default_buffer->SetName(file_name);
+
   if (FAILED(result)) {
     LOG_ERROR("RR::GFX", "Couldn't create texture default buffer");
     return -1;
@@ -411,6 +413,8 @@ int RR::GFX::Texture::Update(ID3D12Device* device, ID3D12GraphicsCommandList* co
 
   _updated = true;
 
+  _texture_data = std::vector<unsigned char>(0);
+
   return 0;
 }
 
@@ -434,4 +438,6 @@ void RR::GFX::Texture::Release() {
     _upload_buffer->Release();
     _upload_buffer = nullptr;
   }
+
+  _texture_data = std::vector<unsigned char>(0);
 }
