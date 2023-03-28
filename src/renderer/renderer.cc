@@ -32,12 +32,24 @@
 #include "renderer/components/world_transform_component.h"
 #include "renderer/components/renderer_component.h"
 
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
+                                                             UINT msg,
+                                                             WPARAM wParam,
+                                                             LPARAM lParam);
 
 static long long CALLBACK WindowProc(void* window, unsigned int message,
                               unsigned long long wParam, long long lParam) {
+  if (ImGui_ImplWin32_WndProcHandler((HWND)window, message, wParam, lParam)) {
+    return true;
+  }
+  
   LRESULT result = 0;
 
   RR::Renderer* renderer = (RR::Renderer*) GetWindowLongPtr((HWND)window, GWLP_USERDATA);
+  ImGuiIO* io = nullptr;
+  if (renderer != nullptr && renderer->initialized()) {
+    io = &ImGui::GetIO();
+  }
 
   switch (message) {
     case WM_CLOSE:
@@ -47,13 +59,19 @@ static long long CALLBACK WindowProc(void* window, unsigned int message,
       renderer->Resize();
       break;
     case WM_KEYDOWN:
-      renderer->OverrideKey(wParam, 1);
+      if (io != nullptr && !io->WantCaptureKeyboard) {
+        renderer->OverrideKey(wParam, 1);
+      }
       break;
     case WM_KEYUP:
-      renderer->OverrideKey(wParam, 0);
+      if (io != nullptr && !io->WantCaptureKeyboard) {
+        renderer->OverrideKey(wParam, 0);
+      }
       break;
     case WM_LBUTTONDOWN:
-      renderer->CaptureMouse();
+      if (io != nullptr && !io->WantCaptureMouse) {
+        renderer->CaptureMouse();
+      }
       break;
     case WM_MOUSEMOVE: {
       int mouse_x = GET_X_LPARAM(lParam);
@@ -385,6 +403,9 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   LOG_DEBUG("RR", "    Available textures: %i", _textures.size());
 
   MTR_END("Renderer", "Init");
+  
+  _initialized = true;
+
   return 0;
 }
 
@@ -483,6 +504,8 @@ void RR::Renderer::Resize() {
   _swap_chain->ResizeBuffers(kSwapchainBufferCount, _window->width(),
                               _window->height(), DXGI_FORMAT_UNKNOWN, 0);
 }
+
+bool RR::Renderer::initialized() const { return _initialized; }
 
 std::shared_ptr<RR::Entity> RR::Renderer::MainCamera() const {
   return _main_camera;

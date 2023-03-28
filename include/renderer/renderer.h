@@ -58,6 +58,8 @@ class Renderer {
   void Stop();
   void Resize();
 
+  bool initialized() const;
+
   std::shared_ptr<Entity> MainCamera() const;
   std::shared_ptr<Entity> RegisterEntity(uint32_t component_types);
   int32_t CreateGeometry(uint32_t geometry_type, std::unique_ptr<GeometryData>&& data);
@@ -91,6 +93,7 @@ class Renderer {
 
   uint16_t _current_frame = 0;
   bool _running = true;
+  bool _initialized = false;
   void (*_update)(void* user_data) = nullptr;
   void* _user_data = nullptr;
 
