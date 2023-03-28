@@ -751,7 +751,7 @@ void RR::Renderer::CaptureMouse() {
   _window->CaptureMouse();
 
   bool capture = _window->isCaptureMouse();
-  ShowCursor(capture);
+  ShowCursor(!capture);
 
   if (!capture) {
     return;
