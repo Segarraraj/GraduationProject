@@ -15,6 +15,10 @@
 #include "OpenFBX/ofbx.h"
 #include "Minitrace/minitrace.h"
 
+#include "Imgui/imgui.h"
+#include "Imgui/backends/imgui_impl_dx12.h"
+#include "Imgui/backends/imgui_impl_win32.h"
+
 #include "renderer/common.hpp"
 #include "renderer/window.h"
 #include "renderer/logger.h"
@@ -336,6 +340,35 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
       _depth_scentil_buffer, &depth_stencil_desc,
       _depth_stencil_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
 
+  // Initialize IMGUI
+
+  LOG_DEBUG("RR", "Initializing Imgui");
+
+  D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+  desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+  desc.NumDescriptors = 1;
+  desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+
+  result = _device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&_imgui_descriptor_heap));
+  if (FAILED(result)) {
+    LOG_ERROR("RR", "Couldn't create Imgui descriptor heap");
+    Cleanup();
+  }
+
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+  (void) io;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  
+
+  ImGui::StyleColorsDark();
+
+  ImGui_ImplWin32_Init(_window->window());
+  ImGui_ImplDX12_Init(_device, kSwapchainBufferCount,
+                      DXGI_FORMAT_R8G8B8A8_UNORM, _imgui_descriptor_heap,
+                      _imgui_descriptor_heap->GetCPUDescriptorHandleForHeapStart(),
+                      _imgui_descriptor_heap->GetGPUDescriptorHandleForHeapStart());
+
   printf("\n");
   LOG_DEBUG("RR", "Initializing pipelines");
   _pipelines[RR::PipelineTypes::kPipelineType_PBR] = RR::GFX::Pipeline();
@@ -389,6 +422,10 @@ void RR::Renderer::Start() {
     }
     MTR_END("Renderer", "Win 32 API message dispatch");
 
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
     MTR_BEGIN("Renderer", "Update graphic resources");
     UpdateGraphicResources();
     MTR_END("Renderer", "Update graphic resources");
@@ -404,6 +441,12 @@ void RR::Renderer::Start() {
     MTR_BEGIN("Renderer", "Internal update");
     InternalUpdate();
     MTR_END("Renderer", "Internal update");
+
+    MTR_BEGIN("Renderer", "Show editor");
+    ShowEditor();
+    MTR_END("Renderer", "Show editor");
+
+    ImGui::Render();
 
     MTR_BEGIN("Renderer", "Update pipeline");
     UpdatePipeline();
@@ -1022,6 +1065,9 @@ void RR::Renderer::UpdatePipeline() {
   }
   MTR_END("Renderer", "Populate command list");
 
+  _command_list->SetDescriptorHeaps(1, &_imgui_descriptor_heap);
+  ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), _command_list);
+
   D3D12_RESOURCE_BARRIER rt_present_barrier = {};
   rt_present_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
   rt_present_barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -1038,6 +1084,10 @@ void RR::Renderer::UpdatePipeline() {
   }
 }
 
+void RR::Renderer::ShowEditor() {
+  ImGui::ShowDemoWindow();
+}
+
 void RR::Renderer::Render() {
   HRESULT result = {};
 
@@ -1051,6 +1101,10 @@ void RR::Renderer::Render() {
 
 void RR::Renderer::Cleanup() {
   WaitForAllFrames();
+
+  ImGui_ImplDX12_Shutdown();
+  ImGui_ImplWin32_Shutdown();
+  ImGui::DestroyContext();
 
   mtr_flush();
   mtr_shutdown();
@@ -1073,6 +1127,11 @@ void RR::Renderer::Cleanup() {
   if (_rt_descriptor_heap != nullptr) {
     _rt_descriptor_heap->Release();
     _rt_descriptor_heap = nullptr;
+  }
+
+  if (_imgui_descriptor_heap != nullptr) {
+    _imgui_descriptor_heap->Release();
+    _imgui_descriptor_heap = nullptr;
   }
 
   if (_command_list != nullptr) {

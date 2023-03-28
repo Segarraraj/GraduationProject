@@ -30,7 +30,7 @@ void RR::Window::Init(void* instance, const char* class_name,
 
 void RR::Window::Show() const { ShowWindow((HWND)_window, 1); }
 
-const void* RR::Window::window() const { return _window; }
+void* RR::Window::window() const { return _window; }
 
 uint32_t RR::Window::width() const {
   RECT bounds;

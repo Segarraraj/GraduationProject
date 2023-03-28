@@ -23,7 +23,7 @@ class Window {
 
   void CaptureMouse();
   
-  const void* window() const;
+  void* window() const;
   uint32_t width() const;
   uint32_t height() const;
   uint32_t screenCenterX() const;

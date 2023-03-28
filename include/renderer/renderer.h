@@ -98,6 +98,7 @@ class Renderer {
   IDXGISwapChain3* _swap_chain = nullptr;
   ID3D12CommandQueue* _command_queue = nullptr;
   ID3D12DescriptorHeap* _rt_descriptor_heap = nullptr;
+  ID3D12DescriptorHeap* _imgui_descriptor_heap = nullptr;
   ID3D12Resource* _render_targets[kSwapchainBufferCount] = {0};
   ID3D12CommandAllocator* _command_allocators[kSwapchainBufferCount] = {0};
   ID3D12GraphicsCommandList* _command_list = nullptr;
@@ -115,6 +116,7 @@ class Renderer {
   void UpdateGraphicResources();
   void InternalUpdate();
   void UpdatePipeline();
+  void ShowEditor();
   void Render();
   void Cleanup();
   void WaitForPreviousFrame();
