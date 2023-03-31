@@ -14,34 +14,37 @@ namespace RR {
 namespace GFX {
 class Texture;
 }
+
 struct MVPStruct {
   DirectX::XMFLOAT4X4 model;
   DirectX::XMFLOAT4X4 view;
   DirectX::XMFLOAT4X4 projection;
 };
 
-struct PBRSettings {
- public:
-  int32_t texture;
- private:
-  MVPStruct mvp;
+struct PBRTextures {
+  int32_t base_color;
+};
 
-  friend class Renderer;
-  friend class RendererComponent;
+struct PBRSettings {
+  float metalic;
+  float roughness;
+  float reflectance;
+  float padding;
+  float base_color[3];
 };
 
 struct PhongSettings {
- private:
-  MVPStruct mvp;
-  float color[3]; 
-
-  friend class Renderer;
-  friend class RendererComponent;
+ public:
+  float color[3];
 };
 
-union RendererSettings {
+union MaterialSettings {
   PBRSettings pbr_settings;
   PhongSettings phong_settings;
+};
+
+union TextureSettings {
+  PBRTextures pbr_textures;
 };
 
 class Renderer;
@@ -52,18 +55,21 @@ class RendererComponent : public EntityComponent {
 
   void Init(const Renderer* renderer, uint32_t pipeline_type, int geometry);
 
-  RendererSettings settings;
+  MaterialSettings settings;
+  TextureSettings textureSettings;
   int32_t geometry = -1;
  private:
   uint32_t _pipeline_type = 0U;
   bool _initialized = false;
   bool _resource_views_created = false;
 
-  std::vector<ID3D12Resource*> _constant_buffers;
-  ID3D12DescriptorHeap* _descriptor_heap = nullptr;
+  std::vector<ID3D12Resource*> _mvp_constant_buffers;
+  std::vector<ID3D12Resource*> _material_constant_buffers;
+  ID3D12DescriptorHeap* _srv_descriptor_heap = nullptr;
   
-  void Update(const RendererSettings& settings, uint32_t frame);
-  uint64_t ConstantBufferView(uint32_t frame); 
+  void Update(const MVPStruct& mvp, uint32_t frame);
+  uint64_t MVPConstantBufferView(uint32_t frame); 
+  uint64_t MaterialConstantBufferView(uint32_t frame); 
   void CreateResourceViews(ID3D12Device* device, std::vector<GFX::Texture>& textures);
 
   friend class Renderer;

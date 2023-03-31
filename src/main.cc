@@ -10,7 +10,7 @@
 #include "renderer/components/renderer_component.h"
 #include "renderer/components/camera_component.h"
 
-static struct UserData {
+struct UserData {
   RR::Renderer* renderer;
 };
 
@@ -77,12 +77,12 @@ int main(int argc, char** argv) {
       renderer.MainCamera()->GetComponent(RR::kComponentType_Camera));
 
   camera->farZ = 500.0f;
-  camera->nearZ - 0.001f;
+  camera->nearZ = 0.001f;
 
-  transform->position = {0.0f, 0.0f, 0.0f};
+  transform->position = {0.0f, 0.5f, -10.0f};
   transform->rotation = {0.0f, 0.0f, 0.0f};
 
-  renderer.LoadFBXScene("../../resources/BistroExterior.fbx");
+  renderer.LoadFBXScene("../../resources/sphere.fbx");
 
   renderer.Start();
 

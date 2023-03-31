@@ -1,4 +1,4 @@
-cbuffer CB : register(b0) { 
+cbuffer MVP : register(b0) { 
   float4x4 model;
   float4x4 view;
   float4x4 projection;

@@ -30,22 +30,40 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
     root_signature_feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
   }
 
-  std::vector<D3D12_ROOT_PARAMETER1> parameters;
-  std::vector<D3D12_STATIC_SAMPLER_DESC> samplers;
+  std::vector<D3D12_ROOT_PARAMETER1> parameters = std::vector<D3D12_ROOT_PARAMETER1>(2);
+  std::vector<D3D12_STATIC_SAMPLER_DESC> samplers = std::vector<D3D12_STATIC_SAMPLER_DESC>(0);
+
+  D3D12_ROOT_DESCRIPTOR1 mvp_cb_descriptor = {};
+  mvp_cb_descriptor.RegisterSpace = 0;
+  mvp_cb_descriptor.ShaderRegister = 0;
+  mvp_cb_descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+
+  parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+  parameters[0].Descriptor = mvp_cb_descriptor;
+  parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+
+  D3D12_ROOT_DESCRIPTOR1 material_cb_descriptor = {};
+  material_cb_descriptor.RegisterSpace = 0;
+  material_cb_descriptor.ShaderRegister = 1;
+  material_cb_descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+
+  parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+  parameters[1].Descriptor = material_cb_descriptor;
+  parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
   switch (type) {
     case RR::kPipelineType_PBR: {
-      parameters = std::vector<D3D12_ROOT_PARAMETER1>(2);
-      samplers = std::vector<D3D12_STATIC_SAMPLER_DESC>(1);
+      parameters.resize(4);
+      samplers.resize(1);
 
-      D3D12_ROOT_DESCRIPTOR1 parameter1_descriptor = {};
-      parameter1_descriptor.RegisterSpace = 0;
-      parameter1_descriptor.ShaderRegister = 0;
-      parameter1_descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+      D3D12_ROOT_CONSTANTS pipeline_constants = {};
+      pipeline_constants.RegisterSpace = 0;
+      pipeline_constants.ShaderRegister = 2;
+      pipeline_constants.Num32BitValues = 4;
 
-      parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-      parameters[0].Descriptor = parameter1_descriptor;
-      parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+      parameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+      parameters[2].Constants = pipeline_constants;
+      parameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
       D3D12_DESCRIPTOR_RANGE1 table_ranges[1] = {};
       table_ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -59,9 +77,9 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
       descriptor_table.NumDescriptorRanges = 1;
       descriptor_table.pDescriptorRanges = &table_ranges[0];
 
-      parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-      parameters[1].DescriptorTable = descriptor_table;
-      parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+      parameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+      parameters[3].DescriptorTable = descriptor_table;
+      parameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
       samplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
       samplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -78,21 +96,6 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
       samplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
       break;
     }
-      
-    case PipelineTypes::kPipelineType_Phong: {
-      parameters = std::vector<D3D12_ROOT_PARAMETER1>(1);
-      samplers = std::vector<D3D12_STATIC_SAMPLER_DESC>(0);
-
-      D3D12_ROOT_DESCRIPTOR1 parameter1_descriptor = {};
-      parameter1_descriptor.RegisterSpace = 0;
-      parameter1_descriptor.ShaderRegister = 0;
-      parameter1_descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
-
-      parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-      parameters[0].Descriptor = parameter1_descriptor;
-      parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-      break;
-    }      
   }  
 
   D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
@@ -292,10 +295,16 @@ void RR::GFX::Pipeline::Release() {
   }
 }
 
-ID3D12PipelineState* RR::GFX::Pipeline::PipelineState() { return _pipeline_state; }
+ID3D12PipelineState* RR::GFX::Pipeline::PipelineState() { 
+  return _pipeline_state; 
+}
 
 ID3D12RootSignature* RR::GFX::Pipeline::RootSignature() {
   return _root_signature;
 }
 
-uint32_t RR::GFX::Pipeline::GeometryType() { return _geometry_type; }
+uint32_t RR::GFX::Pipeline::GeometryType() { 
+  return _geometry_type; 
+}
+
+uint32_t RR::GFX::Pipeline::Type() { return _type; }

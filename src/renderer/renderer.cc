@@ -609,7 +609,7 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
 
     int vertex_offset = 3 + (has_normals ? 3 : 0) + (has_uvs ? 2 : 0);
 
-    if (material_count != 1) {
+    if (material_count != 0) {
       int material_index = 0;
       int previous_count = 0;
       for (int j = 0; j <= index_count / 3; j++) {
@@ -704,36 +704,36 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
             std::static_pointer_cast<RendererComponent>(
                 entity->GetComponent(ComponentTypes::kComponentType_Renderer));
 
-        const ofbx::Material* material = mesh.getMaterial(i->first);
-        if (material != nullptr) {
-          const ofbx::Texture* texture =
-              material->getTexture(ofbx::Texture::DIFFUSE);
-          if (texture != nullptr) {
-            texture->getRelativeFileName().toString(texture_name);
-
-            int texture_handle = -1;
-            std::string texture_key = texture_name;
-            if (textures.count(texture_key) == 1) {
-              texture_handle = textures[texture_name];
-            } else {
-              char resources[256] = "../../resources/\0";
-              char* appended_name = strcat(resources, texture_name);
-              mbstowcs(real_texture_name, appended_name, 256);
-              texture_handle = LoadTexture(real_texture_name);
-              ZeroMemory(real_texture_name, 256);
-              textures[texture_key] = texture_handle;
-            }
-
-            renderer_component->settings.pbr_settings.texture = texture_handle;
-          }
-        }
-
-        //          float color_component = 1.0f - (1.0f / 8.0f) * i->first;
-        // float color[] = {color_component, color_component, color_component};
-        // memcpy(renderer_component->settings.phong_settings.color, color,
-        //       sizeof(color));
         renderer_component->Init(this, PipelineTypes::kPipelineType_PBR,
                                  geometry_handle);
+
+        if (material_count == 0) {
+          continue;
+        }
+
+        const ofbx::Material* material = mesh.getMaterial(i->first);
+
+        const ofbx::Texture* texture = material->getTexture(ofbx::Texture::DIFFUSE);
+        if (texture != nullptr) {
+          texture->getRelativeFileName().toString(texture_name);
+
+          int texture_handle = -1;
+          std::string texture_key = texture_name;
+          if (textures.count(texture_key) == 1) {
+            texture_handle = textures[texture_name];
+          } else {
+            char resources[256] = "../../resources/\0";
+            char* appended_name = strcat(resources, texture_name);
+            mbstowcs(real_texture_name, appended_name, 256);
+            texture_handle = LoadTexture(real_texture_name);
+            ZeroMemory(real_texture_name, 256);
+            textures[texture_key] = texture_handle;
+          }
+
+          renderer_component->textureSettings.pbr_textures.base_color = texture_handle;
+        }
+
+        
       }
     }
 
@@ -964,30 +964,11 @@ void RR::Renderer::UpdatePipeline() {
       continue;
     }
 
-    RendererSettings settings = {};
-    switch (renderer->_pipeline_type) {
-      case RR::PipelineTypes::kPipelineType_PBR:
-        DirectX::XMStoreFloat4x4(&settings.pbr_settings.mvp.view,
-                                 DirectX::XMMatrixTranspose(view));
-        DirectX::XMStoreFloat4x4(&settings.pbr_settings.mvp.projection,
-                                 DirectX::XMMatrixTranspose(projection));
-        DirectX::XMStoreFloat4x4(
-            &settings.pbr_settings.mvp.model,
-            DirectX::XMMatrixTranspose(
-                DirectX::XMLoadFloat4x4(&world_transform->world)));
-        renderer->Update(settings, _current_frame);
-        break;
-      case RR::PipelineTypes::kPipelineType_Phong:
-        DirectX::XMStoreFloat4x4(&settings.phong_settings.mvp.view,
-                                 DirectX::XMMatrixTranspose(view));
-        DirectX::XMStoreFloat4x4(&settings.phong_settings.mvp.projection,
-                                 DirectX::XMMatrixTranspose(projection));
-        DirectX::XMStoreFloat4x4(&settings.phong_settings.mvp.model,
-            DirectX::XMMatrixTranspose(DirectX::XMLoadFloat4x4(&world_transform->world)));
-
-        renderer->Update(settings, _current_frame);
-        break;
-    }
+    MVPStruct mvp = {};
+    DirectX::XMStoreFloat4x4(&mvp.view, DirectX::XMMatrixTranspose(view));
+    DirectX::XMStoreFloat4x4(&mvp.projection, DirectX::XMMatrixTranspose(projection));
+    DirectX::XMStoreFloat4x4(&mvp.model, DirectX::XMMatrixTranspose(DirectX::XMLoadFloat4x4(&world_transform->world)));
+    renderer->Update(mvp, _current_frame);
     render_list[renderer->_pipeline_type].push_back(renderer);
   }
   MTR_END("Renderer", "Populate render list");
@@ -1048,6 +1029,14 @@ void RR::Renderer::UpdatePipeline() {
     GFX::Pipeline pipeline = _pipelines[i->first];
     _command_list->SetPipelineState(pipeline.PipelineState());
     _command_list->SetGraphicsRootSignature(pipeline.RootSignature());
+
+    switch (pipeline.Type()) {
+      case RR::PipelineTypes::kPipelineType_PBR: {
+        _command_list->SetGraphicsRoot32BitConstants(2, 1, &elapsed_time, 0);
+        _command_list->SetGraphicsRoot32BitConstants(2, 3, &camera_world->world._41, 1);
+        break;
+      }          
+    }
     
     for (std::list<std::shared_ptr<RendererComponent>>::iterator j = i->second.begin();
          j != i->second.end(); j++) {
@@ -1066,23 +1055,27 @@ void RR::Renderer::UpdatePipeline() {
         j->get()->CreateResourceViews(_device, _textures);
       }
 
-      _command_list->IASetVertexBuffers( 0, 1, _geometries[j->get()->geometry].VertexView());
+      _command_list->IASetVertexBuffers(0, 1, _geometries[j->get()->geometry].VertexView());
       _command_list->IASetIndexBuffer(_geometries[j->get()->geometry].IndexView());
-      _command_list->SetGraphicsRootConstantBufferView(0, j->get()->ConstantBufferView(_current_frame));
+      _command_list->SetGraphicsRootConstantBufferView(0, j->get()->MVPConstantBufferView(_current_frame));
+      _command_list->SetGraphicsRootConstantBufferView(1, j->get()->MaterialConstantBufferView(_current_frame));
       
-      
-      switch (i->first) { 
-        case RR::PipelineTypes::kPipelineType_PBR: {
-          ID3D12DescriptorHeap* descriptor_heaps[] = {j->get()->_descriptor_heap};
-          _command_list->SetDescriptorHeaps(1, descriptor_heaps);
-          _command_list->SetGraphicsRootDescriptorTable(1, descriptor_heaps[0]->GetGPUDescriptorHandleForHeapStart());
-          break;
-        }          
-        case RR::PipelineTypes::kPipelineType_Phong: {
-          break;        
+      if (j->get()->_resource_views_created) {
+        switch (i->first) {
+          case RR::PipelineTypes::kPipelineType_PBR: {
+            ID3D12DescriptorHeap* descriptor_heaps[] = {
+                j->get()->_srv_descriptor_heap};
+            _command_list->SetDescriptorHeaps(1, descriptor_heaps);
+            _command_list->SetGraphicsRootDescriptorTable(
+                3, descriptor_heaps[0]->GetGPUDescriptorHandleForHeapStart());
+            break;
+          }
+          case RR::PipelineTypes::kPipelineType_Phong: {
+            break;
+          }
         }
       }
-      
+
       _command_list->DrawIndexedInstanced(_geometries[j->get()->geometry].Indices(), 1, 0, 0, 0);
     }
   }
