@@ -26,7 +26,7 @@ struct PBRTextures {
 };
 
 struct PBRSettings {
-  float metalic;
+  float metallic;
   float roughness;
   float reflectance;
   float padding;
