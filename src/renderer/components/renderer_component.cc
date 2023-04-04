@@ -83,8 +83,8 @@ void RR::RendererComponent::Init(const Renderer* renderer,
 
   switch (pipeline_type) {
     case RR::PipelineTypes::kPipelineType_PBR:
-      settings.pbr_settings.metallic = 0.8f;
-      settings.pbr_settings.roughness = 0.25f;
+      settings.pbr_settings.metallic = 0.0f;
+      settings.pbr_settings.roughness = 1.f;
       settings.pbr_settings.reflectance = 0.5f;
       settings.pbr_settings.base_color[0] = 1.0f;
       settings.pbr_settings.base_color[1] = 1.0f;

@@ -86,7 +86,7 @@ float4 main(VertexOutput input) : SV_TARGET {
   
   // diffuse BRDF
   float3 Fd = diffuseColor * Fd_Lambert();
+  //float3 Fd = diffuseColor * Fd_Burley(NoV, NoL, LoH, roughness);
 
   return float4((Fd + Fr) * float3(1.0f, 1.0f, 1.0f) * NoL, 1.0f);
-  //return float4((input.normal + 1.0f) * 0.5f, 1.0f);
 }
