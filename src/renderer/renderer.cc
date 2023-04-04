@@ -412,6 +412,7 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
 void RR::Renderer::Start() {
   std::chrono::time_point<std::chrono::steady_clock> renderer_start, frame_start, frame_end;
   renderer_start = std::chrono::high_resolution_clock::now();
+  frame_start = std::chrono::high_resolution_clock::now();
   
   while (_running) {
     MTR_BEGIN("Renderer", "Frame CPU wait");
