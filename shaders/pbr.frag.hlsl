@@ -1,17 +1,5 @@
-Texture2D baseColorT : register(t0);
+Texture2D textures[5] : register(t0);
 SamplerState s1 : register(s0);
-
-Texture2D metallicT : register(t1);
-SamplerState s2 : register(s1);
-
-Texture2D normalT : register(t2);
-SamplerState s3 : register(s2);
-
-Texture2D roughnessT : register(t3);
-SamplerState s4 : register(s3);
-
-Texture2D reflectanceT : register(t4);
-SamplerState s5 : register(s4);
 
 static const float PI = 3.14159265359f;
 
@@ -20,7 +8,7 @@ cbuffer MaterialParameters : register(b1) {
   float perceptualRoughness;
   float reflectance;
   float padding;
-  float3 baseColor;
+  float4 baseColor;
 
   bool baseColorTexture;
   bool normalTexture;
@@ -89,15 +77,30 @@ float4 main(VertexOutput input) : SV_TARGET {
   float LoH = clamp(dot(L, H), 0.0f, 1.0f);
 
   // Material parameters remap
-  float3 diffuseColor = baseColor.rgb;
+  float4 realBaseColor = baseColor;
   if (baseColorTexture) {
-    diffuseColor = baseColorT.Sample(s1, input.uv);
+    realBaseColor = textures[0].Sample(s1, input.uv);
   }
 
-  diffuseColor = (1.0f - metallic) * diffuseColor;
-  float3 f0 = 0.16f * reflectance * reflectance * (1.0f - metallic) +
-             baseColor * metallic;
-  float roughness = perceptualRoughness * perceptualRoughness;
+  float realMetallic = metallic;
+  if (metallicTexture) {
+    realMetallic = textures[1].Sample(s1, input.uv).r;
+  }
+
+  float realperceptualRoughness = perceptualRoughness;
+  if (roughnessTexture) {
+    realperceptualRoughness = textures[3].Sample(s1, input.uv).r;
+  }
+
+  float realReflectance = reflectance;
+  if (reflectanceTexture) {
+    realReflectance = textures[4].Sample(s1, input.uv).r;
+  }
+
+  float3 diffuseColor = (1.0f - realMetallic) * realBaseColor.rgb;
+  float3 f0 = 0.16f * realReflectance * realReflectance * (1.0f - realMetallic) +
+      realBaseColor.rgb * realMetallic;
+  float roughness = realperceptualRoughness * realperceptualRoughness;
 
   // PBR
   float D = D_GGX(NoH, roughness);
@@ -111,5 +114,5 @@ float4 main(VertexOutput input) : SV_TARGET {
   float3 Fd = diffuseColor * Fd_Lambert();
   //float3 Fd = diffuseColor * Fd_Burley(NoV, NoL, LoH, roughness);
 
-  return float4((Fd + Fr) * float3(1.0f, 1.0f, 1.0f) * NoL, 1.0f);
+  return float4((Fd + Fr) * float3(1.0f, 1.0f, 1.0f) * NoL, realBaseColor.a);
 }

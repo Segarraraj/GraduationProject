@@ -35,14 +35,19 @@ struct PBRSettings {
   float roughness;
   float reflectance;
   float padding;
-  float base_color[3];
+  float base_color[4];
 
  private:
   bool base_color_texture;
+  char padding1[3];
   bool normal_texture;
+  char padding2[3];
   bool metallic_texture;
+  char padding3[3];
   bool roughness_texture;
+  char padding4[3];
   bool reflectance_texture;
+  char padding5[3];
 
   friend class RendererComponent;
 };

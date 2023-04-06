@@ -395,7 +395,10 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
 
   _pipelines[RR::PipelineTypes::kPipelineType_Phong] = RR::GFX::Pipeline();
   _pipelines[RR::PipelineTypes::kPipelineType_Phong].Init(
-        _device, kPipelineType_Phong, kGeometryType_Positions_Normals_UV);
+      _device, kPipelineType_Phong, kGeometryType_Positions_Normals_UV);
+
+  LOG_DEBUG("RR", "Loading default assets");
+  LoadTexture(L"../../resources/Textures/default.jpg");
 
   printf("\n");
   LOG_DEBUG("RR", "Renderer initialized");

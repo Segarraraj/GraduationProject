@@ -93,6 +93,7 @@ void RR::RendererComponent::Init(const Renderer* renderer,
       settings.pbr_settings.base_color[0] = 1.0f;
       settings.pbr_settings.base_color[1] = 1.0f;
       settings.pbr_settings.base_color[2] = 1.0f;
+      settings.pbr_settings.base_color[3] = 1.0f;
 
       textureSettings.pbr_textures.base_color = -1;
       textureSettings.pbr_textures.normal = -1;
@@ -140,6 +141,8 @@ void RR::RendererComponent::CreateResourceViews(
       if (settings.pbr_settings.base_color_texture) {
         textures[textureSettings.pbr_textures.base_color].CreateResourceView(
             device, descriptor_handle);
+      } else {
+        textures[0].CreateResourceView(device, descriptor_handle);
       }
 
       descriptor_handle.ptr += descriptor_size;
@@ -147,6 +150,8 @@ void RR::RendererComponent::CreateResourceViews(
       if (settings.pbr_settings.metallic_texture) {
         textures[textureSettings.pbr_textures.metallic].CreateResourceView(
             device, descriptor_handle);
+      } else {
+        textures[0].CreateResourceView(device, descriptor_handle);
       }
 
       descriptor_handle.ptr += descriptor_size;
@@ -154,6 +159,8 @@ void RR::RendererComponent::CreateResourceViews(
       if (settings.pbr_settings.normal_texture) {
         textures[textureSettings.pbr_textures.normal].CreateResourceView(
             device, descriptor_handle);
+      } else {
+        textures[0].CreateResourceView(device, descriptor_handle);
       }
 
       descriptor_handle.ptr += descriptor_size;
@@ -161,6 +168,8 @@ void RR::RendererComponent::CreateResourceViews(
       if (settings.pbr_settings.roughness_texture) {
         textures[textureSettings.pbr_textures.roughness].CreateResourceView(
             device, descriptor_handle);
+      } else {
+        textures[0].CreateResourceView(device, descriptor_handle);
       }
 
       descriptor_handle.ptr += descriptor_size;
@@ -168,6 +177,8 @@ void RR::RendererComponent::CreateResourceViews(
       if (settings.pbr_settings.reflectance_texture) {
         textures[textureSettings.pbr_textures.reflectance].CreateResourceView(
             device, descriptor_handle);
+      } else {
+        textures[0].CreateResourceView(device, descriptor_handle);
       }
       break;
     }      
