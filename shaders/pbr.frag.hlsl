@@ -9,6 +9,12 @@ cbuffer MaterialParameters : register(b1) {
   float reflectance;
   float padding;
   float3 baseColor;
+
+  bool baseColorTexture;
+  bool normalTexture;
+  bool metallicTexture;
+  bool roughnessTexture;
+  bool reflectanceTexture;
 };
 
 cbuffer Constants : register(b2) {

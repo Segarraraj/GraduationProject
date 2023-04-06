@@ -54,7 +54,7 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
   switch (type) {
     case RR::kPipelineType_PBR: {
       parameters.resize(4);
-      samplers.resize(1);
+      samplers.resize(5);
 
       D3D12_ROOT_CONSTANTS pipeline_constants = {};
       pipeline_constants.RegisterSpace = 0;
@@ -94,6 +94,18 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
       samplers[0].ShaderRegister = 0;
       samplers[0].RegisterSpace = 0;
       samplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+      samplers[1] = samplers[0];
+      samplers[1].ShaderRegister = 1;
+
+      samplers[2] = samplers[0];
+      samplers[2].ShaderRegister = 2;
+
+      samplers[3] = samplers[0];
+      samplers[3].ShaderRegister = 3;
+
+      samplers[4] = samplers[0];
+      samplers[4].ShaderRegister = 4;
       break;
     }
   }  

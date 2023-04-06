@@ -23,14 +23,29 @@ struct MVPStruct {
 
 struct PBRTextures {
   int32_t base_color;
+  int32_t normal;
+  int32_t metallic;
+  int32_t roughness;
+  int32_t reflectance;
 };
 
 struct PBRSettings {
+ public:
   float metallic;
   float roughness;
   float reflectance;
   float padding;
   float base_color[3];
+  float padding1;
+
+ private:
+  bool base_color_texture;
+  bool normal_texture;
+  bool metallic_texture;
+  bool roughness_texture;
+  bool reflectance_texture;
+
+  friend class RendererComponent;
 };
 
 struct PhongSettings {
@@ -61,16 +76,17 @@ class RendererComponent : public EntityComponent {
  private:
   uint32_t _pipeline_type = 0U;
   bool _initialized = false;
-  bool _resource_views_created = false;
 
   std::vector<ID3D12Resource*> _mvp_constant_buffers;
   std::vector<ID3D12Resource*> _material_constant_buffers;
-  ID3D12DescriptorHeap* _srv_descriptor_heap = nullptr;
+  std::vector<ID3D12DescriptorHeap*> _srv_descriptor_heaps;
   
   void Update(const MVPStruct& mvp, uint32_t frame);
   uint64_t MVPConstantBufferView(uint32_t frame); 
   uint64_t MaterialConstantBufferView(uint32_t frame); 
-  void CreateResourceViews(ID3D12Device* device, std::vector<GFX::Texture>& textures);
+  void CreateResourceViews(ID3D12Device* device, 
+                           std::vector<GFX::Texture>& textures, 
+                           uint32_t frame);
 
   friend class Renderer;
 };

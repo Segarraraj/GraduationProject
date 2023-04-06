@@ -1052,28 +1052,23 @@ void RR::Renderer::UpdatePipeline() {
         continue;
       }
 
-      if (!j->get()->_resource_views_created) {
-        j->get()->CreateResourceViews(_device, _textures);
-      }
+      j->get()->CreateResourceViews(_device, _textures, _current_frame);
 
       _command_list->IASetVertexBuffers(0, 1, _geometries[j->get()->geometry].VertexView());
       _command_list->IASetIndexBuffer(_geometries[j->get()->geometry].IndexView());
       _command_list->SetGraphicsRootConstantBufferView(0, j->get()->MVPConstantBufferView(_current_frame));
       _command_list->SetGraphicsRootConstantBufferView(1, j->get()->MaterialConstantBufferView(_current_frame));
       
-      if (j->get()->_resource_views_created) {
-        switch (i->first) {
-          case RR::PipelineTypes::kPipelineType_PBR: {
-            ID3D12DescriptorHeap* descriptor_heaps[] = {
-                j->get()->_srv_descriptor_heap};
-            _command_list->SetDescriptorHeaps(1, descriptor_heaps);
-            _command_list->SetGraphicsRootDescriptorTable(
-                3, descriptor_heaps[0]->GetGPUDescriptorHandleForHeapStart());
-            break;
-          }
-          case RR::PipelineTypes::kPipelineType_Phong: {
-            break;
-          }
+     switch (i->first) {
+        case RR::PipelineTypes::kPipelineType_PBR: {
+          ID3D12DescriptorHeap* descriptor_heaps[] = { 
+            j->get()->_srv_descriptor_heaps[_current_frame] 
+          };
+
+          _command_list->SetDescriptorHeaps(1, descriptor_heaps);
+          _command_list->SetGraphicsRootDescriptorTable(
+              3, descriptor_heaps[0]->GetGPUDescriptorHandleForHeapStart());
+          break;
         }
       }
 

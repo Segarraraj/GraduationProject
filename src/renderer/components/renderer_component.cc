@@ -15,6 +15,7 @@ void RR::RendererComponent::Init(const Renderer* renderer,
 
   _mvp_constant_buffers = std::vector<ID3D12Resource*>(renderer->kSwapchainBufferCount);
   _material_constant_buffers = std::vector<ID3D12Resource*>(renderer->kSwapchainBufferCount);
+  _srv_descriptor_heaps = std::vector<ID3D12DescriptorHeap*>(renderer->kSwapchainBufferCount);
 
   D3D12_HEAP_PROPERTIES mvp_cb_properties = {};
   mvp_cb_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -51,14 +52,20 @@ void RR::RendererComponent::Init(const Renderer* renderer,
   material_cb_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   material_cb_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
+  D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
+  heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+  heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+  heap_desc.NumDescriptors = 0;
+
   switch (pipeline_type) { 
     case RR::PipelineTypes::kPipelineType_PBR:
       material_cb_desc.Width = (sizeof(RR::PBRSettings) + 255) & ~255;
+      heap_desc.NumDescriptors = 5;
       break;
     case RR::PipelineTypes::kPipelineType_Phong:
       material_cb_desc.Width = (sizeof(RR::PhongSettings) + 255) & ~255;
       break;
-  }
+  }  
 
   // Create constant buffer
   for (uint16_t i = 0; i < renderer->kSwapchainBufferCount; ++i) {
@@ -71,15 +78,12 @@ void RR::RendererComponent::Init(const Renderer* renderer,
         &material_cb_properties, D3D12_HEAP_FLAG_NONE, 
         &material_cb_desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
         IID_PPV_ARGS(&_material_constant_buffers[i]));
-  }
 
-  D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
-  heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-  heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-  heap_desc.NumDescriptors = 1;
-
-  renderer->_device->CreateDescriptorHeap(&heap_desc,
-                                          IID_PPV_ARGS(&_srv_descriptor_heap));
+    if (heap_desc.NumDescriptors != 0) {
+      renderer->_device->CreateDescriptorHeap(
+          &heap_desc, IID_PPV_ARGS(&_srv_descriptor_heaps[i]));
+    }    
+  }  
 
   switch (pipeline_type) {
     case RR::PipelineTypes::kPipelineType_PBR:
@@ -91,6 +95,10 @@ void RR::RendererComponent::Init(const Renderer* renderer,
       settings.pbr_settings.base_color[2] = 1.0f;
 
       textureSettings.pbr_textures.base_color = -1;
+      textureSettings.pbr_textures.normal = -1;
+      textureSettings.pbr_textures.metallic = -1;
+      textureSettings.pbr_textures.reflectance = -1;
+      textureSettings.pbr_textures.roughness = -1;
       break;
     case RR::PipelineTypes::kPipelineType_Phong:
       settings.phong_settings.color[0] = 1.0f;
@@ -105,20 +113,65 @@ void RR::RendererComponent::Init(const Renderer* renderer,
 }
 
 void RR::RendererComponent::CreateResourceViews(
-    ID3D12Device* device, std::vector<GFX::Texture>& textures) {
+    ID3D12Device* device, std::vector<GFX::Texture>& textures, uint32_t frame) {
   switch (_pipeline_type) {
     case RR::PipelineTypes::kPipelineType_PBR: {
-      if (textureSettings.pbr_textures.base_color == -1) {
-        return;
+      settings.pbr_settings.base_color_texture = 
+          textureSettings.pbr_textures.base_color != -1;
+      
+      settings.pbr_settings.metallic_texture = 
+          textureSettings.pbr_textures.metallic != -1;
+      
+      settings.pbr_settings.normal_texture = 
+          textureSettings.pbr_textures.normal != -1;
+
+      settings.pbr_settings.roughness_texture = 
+          textureSettings.pbr_textures.roughness != -1;
+
+      settings.pbr_settings.reflectance_texture = 
+          textureSettings.pbr_textures.reflectance != -1;
+
+      unsigned int descriptor_size = device->GetDescriptorHandleIncrementSize(
+          D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+      D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle(
+          _srv_descriptor_heaps[frame]->GetCPUDescriptorHandleForHeapStart());
+
+      if (settings.pbr_settings.base_color_texture) {
+        textures[textureSettings.pbr_textures.base_color].CreateResourceView(
+            device, descriptor_handle);
       }
 
-      textures[textureSettings.pbr_textures.base_color].CreateResourceView(
-          device, _srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
+      descriptor_handle.ptr += descriptor_size;
+
+      if (settings.pbr_settings.metallic_texture) {
+        textures[textureSettings.pbr_textures.metallic].CreateResourceView(
+            device, descriptor_handle);
+      }
+
+      descriptor_handle.ptr += descriptor_size * 2;
+
+      if (settings.pbr_settings.normal_texture) {
+        textures[textureSettings.pbr_textures.normal].CreateResourceView(
+            device, descriptor_handle);
+      }
+
+      descriptor_handle.ptr += descriptor_size * 3;
+
+      if (settings.pbr_settings.roughness_texture) {
+        textures[textureSettings.pbr_textures.roughness].CreateResourceView(
+            device, descriptor_handle);
+      }
+
+      descriptor_handle.ptr += descriptor_size * 4;
+
+      if (settings.pbr_settings.reflectance_texture) {
+        textures[textureSettings.pbr_textures.reflectance].CreateResourceView(
+            device, descriptor_handle);
+      }
       break;
     }      
   }
-
-  _resource_views_created = true;
 }
 
 uint64_t RR::RendererComponent::MVPConstantBufferView(uint32_t frame) {
