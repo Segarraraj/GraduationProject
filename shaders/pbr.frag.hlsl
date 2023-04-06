@@ -1,5 +1,17 @@
-Texture2D t1 : register(t0);
+Texture2D baseColorT : register(t0);
 SamplerState s1 : register(s0);
+
+Texture2D metallicT : register(t1);
+SamplerState s2 : register(s1);
+
+Texture2D normalT : register(t2);
+SamplerState s3 : register(s2);
+
+Texture2D roughnessT : register(t3);
+SamplerState s4 : register(s3);
+
+Texture2D reflectanceT : register(t4);
+SamplerState s5 : register(s4);
 
 static const float PI = 3.14159265359f;
 
@@ -77,7 +89,12 @@ float4 main(VertexOutput input) : SV_TARGET {
   float LoH = clamp(dot(L, H), 0.0f, 1.0f);
 
   // Material parameters remap
-  float3 diffuseColor = (1.0f - metallic) * baseColor.rgb;
+  float3 diffuseColor = baseColor.rgb;
+  if (baseColorTexture) {
+    diffuseColor = baseColorT.Sample(s1, input.uv);
+  }
+
+  diffuseColor = (1.0f - metallic) * diffuseColor;
   float3 f0 = 0.16f * reflectance * reflectance * (1.0f - metallic) +
              baseColor * metallic;
   float roughness = perceptualRoughness * perceptualRoughness;

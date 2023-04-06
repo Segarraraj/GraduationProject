@@ -570,10 +570,6 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
   fread(content, 1, file_size, file);
   ofbx::IScene* scene = ofbx::load((ofbx::u8*)content, file_size,
                        (ofbx::u64)ofbx::LoadFlags::TRIANGULATE);
-
-  char texture_name[128] = {0};
-  wchar_t real_texture_name[256] = {0};
-  std::map<std::string, int> textures;
   
   delete[] content;
   fclose(file);
@@ -587,11 +583,12 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
   for (int i = 0; i < mesh_count; i++) {
     const ofbx::Mesh& mesh = *scene->getMesh(i);
     const ofbx::Geometry& geom = *mesh.getGeometry();
-    LOG_DEBUG("RR", "Mesh %i/%i: %s", i, mesh_count, mesh.name);
+    LOG_DEBUG("RR", "Mesh %i/%i: %s", i + 1, mesh_count, mesh.name);
 
     const ofbx::Vec3* vertices = geom.getVertices();
     const ofbx::Vec3* normals = geom.getNormals();
     const ofbx::Vec2* uvs = geom.getUVs();
+    const ofbx::Vec3* tangents = geom.getTangents();
     const int* material_indices = geom.getMaterials();
 
     const char* mesh_name = mesh.name;
@@ -610,72 +607,52 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
 
     int vertex_offset = 3 + (has_normals ? 3 : 0) + (has_uvs ? 2 : 0);
 
-    if (material_count != 0) {
-      int material_index = 0;
-      int previous_count = 0;
-      for (int j = 0; j <= index_count / 3; j++) {
-        if (material_indices[j] == material_index && j != index_count / 3) {
-          continue;
-        }
-
-        std::unique_ptr<GeometryData> data = std::make_unique<GeometryData>();
-        data->index_data.resize((j - previous_count) * 3);
-        data->vertex_data.resize(((j - previous_count) * 3) * vertex_offset);
-
-        material_data[material_index].push_back(std::move(data));
-
-        material_index = material_indices[j];
-        previous_count = j;
+    int material_index = 0;
+    int previous_count = 0;
+    for (int j = 0; j <= index_count / 3; j++) {
+      if (material_index == (material_indices == nullptr ? 0 : material_indices[j]) && j != index_count / 3) {
+        continue;
       }
-    } else {
-      std::unique_ptr<GeometryData> data = std::make_unique<GeometryData>();
-      data->index_data.resize(index_count);
-      data->vertex_data.resize(vertex_count * vertex_offset);
 
-      material_data[0].push_back(std::move(data));
+      std::unique_ptr<GeometryData> data = std::make_unique<GeometryData>();
+      data->index_data.resize((j - previous_count) * 3);
+      data->vertex_data.resize(((j - previous_count) * 3) * vertex_offset);
+
+      material_data[material_index].push_back(std::move(data));
+
+      if (material_indices != nullptr) {
+        material_index = material_indices[j];
+      }
+      previous_count = j;
     }
 
     int previous_submesh_count = 0;
-    for (std::map<int, std::list<std::unique_ptr<GeometryData>>>::iterator i =
-             material_data.begin();
-         i != material_data.end(); i++) {
-      for (std::list<std::unique_ptr<GeometryData>>::iterator data =
-               i->second.begin();
-           data != i->second.end(); data++) {
+    for (std::map<int, std::list<std::unique_ptr<GeometryData>>>::iterator i = material_data.begin(); i != material_data.end(); i++) {
+      for (std::list<std::unique_ptr<GeometryData>>::iterator data = i->second.begin(); data != i->second.end(); data++) {
         for (int j = 0; j < data->get()->index_data.size(); j++) {
           data->get()->index_data[j] = j;
-          data->get()->vertex_data[j * vertex_offset + 0] =
-              (float)vertices[previous_submesh_count + j].x;
-          data->get()->vertex_data[j * vertex_offset + 1] =
-              (float)vertices[previous_submesh_count + j].y;
-          data->get()->vertex_data[j * vertex_offset + 2] =
-              (float)vertices[previous_submesh_count + j].z;
+          data->get()->vertex_data[j * vertex_offset + 0] = (float)vertices[previous_submesh_count + j].x;
+          data->get()->vertex_data[j * vertex_offset + 1] = (float)vertices[previous_submesh_count + j].y;
+          data->get()->vertex_data[j * vertex_offset + 2] = (float)vertices[previous_submesh_count + j].z;
+          
           if (has_normals) {
-            data->get()->vertex_data[j * vertex_offset + 3] =
-                (float)normals[previous_submesh_count + j].x;
-            data->get()->vertex_data[j * vertex_offset + 4] =
-                (float)normals[previous_submesh_count + j].y;
-            data->get()->vertex_data[j * vertex_offset + 5] =
-                (float)normals[previous_submesh_count + j].z;
+            data->get()->vertex_data[j * vertex_offset + 3] = (float)normals[previous_submesh_count + j].x;
+            data->get()->vertex_data[j * vertex_offset + 4] = (float)normals[previous_submesh_count + j].y;
+            data->get()->vertex_data[j * vertex_offset + 5] = (float)normals[previous_submesh_count + j].z;
           }
+
           if (has_uvs) {
-            data->get()->vertex_data[j * vertex_offset + 6] =
-                (float)uvs[previous_submesh_count + j].x;
-            data->get()->vertex_data[j * vertex_offset + 7] =
-                1.0f - (float)uvs[previous_submesh_count + j].y;
+            data->get()->vertex_data[j * vertex_offset + 6] = (float)uvs[previous_submesh_count + j].x;
+            data->get()->vertex_data[j * vertex_offset + 7] = 1.0f - (float)uvs[previous_submesh_count + j].y;
           }
         }
 
         previous_submesh_count += data->get()->index_data.size();
 
-        std::shared_ptr<Entity> entity =
-            RegisterEntity(ComponentTypes::kComponentType_WorldTransform |
-                           ComponentTypes::kComponentType_Renderer);
+        std::shared_ptr<Entity> entity = RegisterEntity(ComponentTypes::kComponentType_WorldTransform | ComponentTypes::kComponentType_Renderer);
         entities.push_back(entity);
 
-        std::shared_ptr<WorldTransform> transform =
-            std::static_pointer_cast<WorldTransform>(entity->GetComponent(
-                ComponentTypes::kComponentType_WorldTransform));
+        std::shared_ptr<WorldTransform> transform = std::static_pointer_cast<WorldTransform>(entity->GetComponent(ComponentTypes::kComponentType_WorldTransform));
 
         DirectX::XMMATRIX matrix((float)world.m[0], (float)world.m[1],
                                  (float)world.m[2], (float)world.m[3],
@@ -701,39 +678,93 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
 
         int geometry_handle = CreateGeometry(geometry_type, std::move(*data));
 
-        std::shared_ptr<RendererComponent> renderer_component =
-            std::static_pointer_cast<RendererComponent>(
-                entity->GetComponent(ComponentTypes::kComponentType_Renderer));
+        std::shared_ptr<RendererComponent> renderer_component = std::static_pointer_cast<RendererComponent>(entity->GetComponent(ComponentTypes::kComponentType_Renderer));
 
-        renderer_component->Init(this, PipelineTypes::kPipelineType_PBR,
-                                 geometry_handle);
+        renderer_component->Init(this, PipelineTypes::kPipelineType_PBR, geometry_handle);
 
         if (material_count == 0) {
           continue;
         }
 
+        char texture_name[128] = {0};
+        wchar_t real_texture_name[256] = {0};
+        std::map<std::string, int> textures;
+
         const ofbx::Material* material = mesh.getMaterial(i->first);
 
-        const ofbx::Texture* texture = material->getTexture(ofbx::Texture::DIFFUSE);
-        if (texture != nullptr) {
-          texture->getRelativeFileName().toString(texture_name);
-
-          int texture_handle = -1;
-          std::string texture_key = texture_name;
-          if (textures.count(texture_key) == 1) {
-            texture_handle = textures[texture_name];
+        for (int j = 0; j < ofbx::Texture::COUNT; j++) {
+          const ofbx::Texture* texture = material->getTexture((ofbx::Texture::TextureType)j);
+          if (texture == nullptr) {
+            switch (j) {
+              case ofbx::Texture::DIFFUSE: {
+                ofbx::Color diff = material->getDiffuseColor();
+                renderer_component->settings.pbr_settings.base_color[0] = diff.r;
+                renderer_component->settings.pbr_settings.base_color[1] = diff.g;
+                renderer_component->settings.pbr_settings.base_color[2] = diff.b;
+                break;
+              }
+              case ofbx::Texture::SHININESS: {
+                renderer_component->settings.pbr_settings.roughness =
+                        (float)material->getShininessExponent();
+                break;
+              }
+              case ofbx::Texture::REFLECTION: {
+                renderer_component->settings.pbr_settings.metallic =
+                    (float)material->getReflectionFactor();
+                break;
+              }
+              case ofbx::Texture::SPECULAR: {
+                renderer_component->settings.pbr_settings.reflectance =
+                    (float)material->getSpecularFactor();
+                break;
+              }
+            }
           } else {
-            char resources[256] = "../../resources/\0";
-            char* appended_name = strcat(resources, texture_name);
-            mbstowcs(real_texture_name, appended_name, 256);
-            texture_handle = LoadTexture(real_texture_name);
-            ZeroMemory(real_texture_name, 256);
-            textures[texture_key] = texture_handle;
+            texture->getRelativeFileName().toString(texture_name);
+
+            int texture_handle = -1;
+            std::string texture_key = texture_name;
+            if (textures.count(texture_key) == 1) {
+              texture_handle = textures[texture_name];
+            } else {
+              char resources[256] = "../../resources/\0";
+              char* appended_name = strcat(resources, texture_name);
+              mbstowcs(real_texture_name, appended_name, 256);
+              texture_handle = LoadTexture(real_texture_name);
+              ZeroMemory(real_texture_name, 256);
+              textures[texture_key] = texture_handle;
+            }
+
+            switch (j) {
+              case ofbx::Texture::DIFFUSE: {
+                renderer_component->textureSettings.pbr_textures.base_color =
+                    texture_handle;
+                break;
+              }
+              case ofbx::Texture::NORMAL:  {
+                renderer_component->textureSettings.pbr_textures.normal =
+                    texture_handle;
+                break;
+              }
+              case ofbx::Texture::SHININESS: {
+                renderer_component->textureSettings.pbr_textures.roughness =
+                    texture_handle;
+                break;
+              }
+              case ofbx::Texture::REFLECTION: {
+                renderer_component->textureSettings.pbr_textures.metallic =
+                    texture_handle;
+                break;
+              }
+              case ofbx::Texture::SPECULAR: {
+                renderer_component->textureSettings.pbr_textures.reflectance =
+                    texture_handle;
+                break;
+              }
+            }
+            
           }
-
-          renderer_component->textureSettings.pbr_textures.base_color = texture_handle;
         }
-
         
       }
     }

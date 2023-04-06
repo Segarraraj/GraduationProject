@@ -12,8 +12,6 @@
 
 struct UserData {
   RR::Renderer* renderer;
-  std::shared_ptr<RR::LocalTransform> tr;
-  std::shared_ptr<RR::RendererComponent> rd;
 };
 
 static void update(void* user_data) { 
@@ -58,9 +56,6 @@ static void update(void* user_data) {
                              -0.05f * data->renderer->IsKeyDown('A')));
 
   DirectX::XMStoreFloat3(&transform->position, traslation);
-
-  //data->tr->rotation.y += data->renderer->delta_time * .1f;
- 
 }
 
 int main(int argc, char** argv) {
@@ -87,16 +82,7 @@ int main(int argc, char** argv) {
   transform->position = {0.0f, 0.5f, -10.0f};
   transform->rotation = {0.0f, 0.0f, 0.0f};
 
-  std::shared_ptr<RR::Entity> ent =
-      renderer.LoadFBXScene("../../resources/sphere.fbx")[0];
-
-  ent->AddComponents(RR::kComponentType_LocalTransform);
-  data.tr = std::static_pointer_cast<RR::LocalTransform>(ent->GetComponent(RR::kComponentType_LocalTransform));
-  data.rd = std::static_pointer_cast<RR::RendererComponent>(ent->GetComponent(RR::kComponentType_Renderer));
-
-  data.tr->scale.x = 100.0f;
-  data.tr->scale.y = 100.0f;
-  data.tr->scale.z = 100.0f;
+  renderer.LoadFBXScene("../../resources/StormTrooper.fbx");
 
   renderer.Start();
 

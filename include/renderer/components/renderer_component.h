@@ -36,7 +36,6 @@ struct PBRSettings {
   float reflectance;
   float padding;
   float base_color[3];
-  float padding1;
 
  private:
   bool base_color_texture;

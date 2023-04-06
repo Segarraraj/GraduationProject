@@ -149,21 +149,21 @@ void RR::RendererComponent::CreateResourceViews(
             device, descriptor_handle);
       }
 
-      descriptor_handle.ptr += descriptor_size * 2;
+      descriptor_handle.ptr += descriptor_size;
 
       if (settings.pbr_settings.normal_texture) {
         textures[textureSettings.pbr_textures.normal].CreateResourceView(
             device, descriptor_handle);
       }
 
-      descriptor_handle.ptr += descriptor_size * 3;
+      descriptor_handle.ptr += descriptor_size;
 
       if (settings.pbr_settings.roughness_texture) {
         textures[textureSettings.pbr_textures.roughness].CreateResourceView(
             device, descriptor_handle);
       }
 
-      descriptor_handle.ptr += descriptor_size * 4;
+      descriptor_handle.ptr += descriptor_size;
 
       if (settings.pbr_settings.reflectance_texture) {
         textures[textureSettings.pbr_textures.reflectance].CreateResourceView(
