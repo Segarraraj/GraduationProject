@@ -82,6 +82,9 @@ struct MeshData {
   std::vector<PBRSettings> settings;
   std::vector<PBRTextures> textures;
   DirectX::XMFLOAT4X4 world;
+  DirectX::XMFLOAT3 position;
+  DirectX::XMFLOAT3 rotation;
+  DirectX::XMFLOAT3 scale;
 };
 }
 

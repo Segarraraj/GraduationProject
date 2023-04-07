@@ -614,6 +614,9 @@ std::shared_ptr<std::vector<RR::MeshData>> RR::Renderer::LoadFBXScene(const char
     bool has_tangents = tangents != nullptr;
 
     ofbx::Matrix world = mesh.getGlobalTransform();
+    ofbx::Vec3 position = mesh.getLocalTranslation();
+    ofbx::Vec3 rotation = mesh.getLocalRotation();
+    ofbx::Vec3 scale = mesh.getLocalScaling();
 
     std::list<std::pair<int, RR::GeometryData>> material_data(0);
 
@@ -787,6 +790,18 @@ std::shared_ptr<std::vector<RR::MeshData>> RR::Renderer::LoadFBXScene(const char
                                (float)world.m[14], (float)world.m[15]);
 
       DirectX::XMStoreFloat4x4(&meshes.get()->at(i).world, matrix); 
+
+      DirectX::XMStoreFloat3(
+          &meshes.get()->at(i).position,
+          DirectX::XMVectorSet(position.x, position.y, position.z, 1.0f)); 
+
+      DirectX::XMStoreFloat3(
+          &meshes.get()->at(i).rotation,
+          DirectX::XMVectorSet(rotation.x, rotation.y, rotation.z, 1.0f));
+
+      DirectX::XMStoreFloat3(
+          &meshes.get()->at(i).scale,
+          DirectX::XMVectorSet(scale.x, scale.y, scale.z, 1.0f)); 
     }
 
     UpdateGraphicResources();

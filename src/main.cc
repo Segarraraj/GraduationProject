@@ -91,7 +91,8 @@ int main(int argc, char** argv) {
     for (int j = 0; j < mesh->geometries.size(); j++) {
       std::shared_ptr<RR::Entity> ent = renderer.RegisterEntity(
           RR::ComponentTypes::kComponentType_Renderer |
-          RR::ComponentTypes::kComponentType_WorldTransform);
+          RR::ComponentTypes::kComponentType_WorldTransform | 
+          RR::ComponentTypes::kComponentType_LocalTransform);
 
       std::shared_ptr<RR::WorldTransform> transform =
           std::static_pointer_cast<RR::WorldTransform>(ent.get()->GetComponent(
@@ -99,10 +100,18 @@ int main(int argc, char** argv) {
 
       std::shared_ptr<RR::RendererComponent> renderer_c =
           std::static_pointer_cast<RR::RendererComponent>(
-              ent.get()->GetComponent(
-                  RR::ComponentTypes::kComponentType_Renderer));
+              ent.get()->GetComponent(RR::ComponentTypes::kComponentType_Renderer));
+
+      std::shared_ptr<RR::LocalTransform> transfrom_l =
+          std::static_pointer_cast<RR::LocalTransform>(ent.get()->GetComponent(
+              RR::ComponentTypes::kComponentType_LocalTransform));
 
       transform->world = mesh->world;
+      
+      transfrom_l->position = mesh->position;
+      transfrom_l->rotation = mesh->rotation;
+      transfrom_l->scale = mesh->scale;
+
       renderer_c->geometry = mesh->geometries[j];
       renderer_c->settings.pbr_settings = mesh->settings[j];
       renderer_c->textureSettings.pbr_textures = mesh->textures[j];
@@ -110,6 +119,8 @@ int main(int argc, char** argv) {
       renderer_c->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR);
     }
   }
+
+  meshes = nullptr;
 
   renderer.Start();
 
