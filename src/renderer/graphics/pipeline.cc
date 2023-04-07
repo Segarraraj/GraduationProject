@@ -189,18 +189,38 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
   switch (geometry_type) { 
     case RR::GeometryTypes::kGeometryType_Positions_Normals:
       input_layout = std::vector<D3D12_INPUT_ELEMENT_DESC>(2);
-      input_layout[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,
-                         0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
-      input_layout[1] = {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT,
-                         0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[1] = {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
       break;
     case RR::GeometryTypes::kGeometryType_Positions_Normals_UV:
       input_layout = std::vector<D3D12_INPUT_ELEMENT_DESC>(3);
-      input_layout[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 
-                         0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
-      input_layout[1] = {"NORMAL", 0,  DXGI_FORMAT_R32G32B32_FLOAT,
-                         0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[1] = {"NORMAL", 0,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 12,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
       input_layout[2] = {"UV", 0,  DXGI_FORMAT_R32G32_FLOAT, 0, 24,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+      break;
+    case RR::GeometryTypes::kGeometryType_Positions_Normals_Tangents_UV:
+      input_layout = std::vector<D3D12_INPUT_ELEMENT_DESC>(4);
+
+      input_layout[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, 
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[1] = {"NORMAL", 0,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, 
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[2] = {"TANGENT", 0,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 24,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[3] = {"UV", 0,  DXGI_FORMAT_R32G32_FLOAT, 0, 36, 
                          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
       break;
   }

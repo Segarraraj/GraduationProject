@@ -359,7 +359,6 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
       _depth_stencil_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
 
   // Initialize IMGUI
-
   LOG_DEBUG("RR", "Initializing Imgui");
 
   D3D12_DESCRIPTOR_HEAP_DESC desc = {};
@@ -391,7 +390,7 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   LOG_DEBUG("RR", "Initializing pipelines");
   _pipelines[RR::PipelineTypes::kPipelineType_PBR] = RR::GFX::Pipeline();
   _pipelines[RR::PipelineTypes::kPipelineType_PBR].Init(
-      _device, kPipelineType_PBR, kGeometryType_Positions_Normals_UV);
+      _device, kPipelineType_PBR, kGeometryType_Positions_Normals_Tangents_UV);
 
   _pipelines[RR::PipelineTypes::kPipelineType_Phong] = RR::GFX::Pipeline();
   _pipelines[RR::PipelineTypes::kPipelineType_Phong].Init(
@@ -603,12 +602,13 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
 
     bool has_normals = normals != nullptr;
     bool has_uvs = uvs != nullptr;
+    bool has_tangents = tangents != nullptr;
 
     ofbx::Matrix world = mesh.getGlobalTransform();
 
     std::map<int, std::list<std::unique_ptr<GeometryData>>> material_data;
 
-    int vertex_offset = 3 + (has_normals ? 3 : 0) + (has_uvs ? 2 : 0);
+    int vertex_offset = 3 + (has_normals ? 3 : 0) + (has_tangents ? 3 : 0) + (has_uvs ? 2 : 0);
 
     int material_index = 0;
     int previous_count = 0;
@@ -626,6 +626,7 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
       if (material_indices != nullptr) {
         material_index = material_indices[j];
       }
+
       previous_count = j;
     }
 
@@ -633,6 +634,7 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
     for (std::map<int, std::list<std::unique_ptr<GeometryData>>>::iterator i = material_data.begin(); i != material_data.end(); i++) {
       for (std::list<std::unique_ptr<GeometryData>>::iterator data = i->second.begin(); data != i->second.end(); data++) {
         for (int j = 0; j < data->get()->index_data.size(); j++) {
+
           data->get()->index_data[j] = j;
           data->get()->vertex_data[j * vertex_offset + 0] = (float)vertices[previous_submesh_count + j].x;
           data->get()->vertex_data[j * vertex_offset + 1] = (float)vertices[previous_submesh_count + j].y;
@@ -644,9 +646,16 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
             data->get()->vertex_data[j * vertex_offset + 5] = (float)normals[previous_submesh_count + j].z;
           }
 
+          if (has_tangents) {
+            data->get()->vertex_data[j * vertex_offset + 6] = (float)tangents[previous_submesh_count + j].x;
+            data->get()->vertex_data[j * vertex_offset + 7] = (float)tangents[previous_submesh_count + j].y;
+            data->get()->vertex_data[j * vertex_offset + 8] = (float)tangents[previous_submesh_count + j].z;
+          }
+
+          // FIXME: uvs don't start on the 9th float with geometries that don't have tangetnts :)
           if (has_uvs) {
-            data->get()->vertex_data[j * vertex_offset + 6] = (float)uvs[previous_submesh_count + j].x;
-            data->get()->vertex_data[j * vertex_offset + 7] = 1.0f - (float)uvs[previous_submesh_count + j].y;
+            data->get()->vertex_data[j * vertex_offset + 9] = (float)uvs[previous_submesh_count + j].x;
+            data->get()->vertex_data[j * vertex_offset + 10] = 1.0f - (float)uvs[previous_submesh_count + j].y;
           }
         }
 
@@ -669,11 +678,12 @@ std::vector<std::shared_ptr<RR::Entity>> RR::Renderer::LoadFBXScene(const char* 
                                  (float)world.m[12], (float)world.m[13],
                                  (float)world.m[14], (float)world.m[15]);
 
-        DirectX::XMStoreFloat4x4(&transform->world, matrix);
+        DirectX::XMStoreFloat4x4(&transform->world, matrix); 
 
         uint32_t geometry_type = GeometryTypes::kGeometryType_None;
-
-        if (has_normals && has_uvs) {
+        if (has_normals && has_uvs && has_tangents) {
+          geometry_type = GeometryTypes::kGeometryType_Positions_Normals_Tangents_UV;
+        } else if (has_normals && has_uvs) {
           geometry_type = GeometryTypes::kGeometryType_Positions_Normals_UV;
         } else if (has_normals) {
           geometry_type = GeometryTypes::kGeometryType_Positions_Normals;

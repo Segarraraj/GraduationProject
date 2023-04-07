@@ -17,6 +17,10 @@ uint32_t RR::GFX::Geometry::Stride() const {
     case RR::kGeometryType_Positions_Normals_UV:
       return sizeof(float) * 3 + sizeof(float) * 3 + sizeof(float) * 2;
       break;
+    case RR::kGeometryType_Positions_Normals_Tangents_UV:
+      return sizeof(float) * 3 + sizeof(float) * 3 + sizeof(float) * 3 +
+             sizeof(float) * 2;
+      break;
   }
 }
 
