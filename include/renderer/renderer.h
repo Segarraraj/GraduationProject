@@ -8,6 +8,8 @@
 #include <memory>
 #include <vector>
 
+#include "common.hpp"
+
 struct ID3D12Device;
 struct IDXGISwapChain3;
 struct ID3D12CommandQueue;
@@ -64,7 +66,7 @@ class Renderer {
   std::shared_ptr<Entity> RegisterEntity(uint32_t component_types);
   int32_t CreateGeometry(uint32_t geometry_type, std::unique_ptr<GeometryData>&& data);
   int32_t LoadTexture(const wchar_t* file_name);
-  std::vector<std::shared_ptr<Entity>> LoadFBXScene(const char* filename);
+  std::shared_ptr<std::vector<MeshData>> LoadFBXScene(const char* filename);
 
   // input
   void CaptureMouse();

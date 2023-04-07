@@ -21,51 +21,6 @@ struct MVPStruct {
   DirectX::XMFLOAT4X4 projection;
 };
 
-struct PBRTextures {
-  int32_t base_color;
-  int32_t normal;
-  int32_t metallic;
-  int32_t roughness;
-  int32_t reflectance;
-};
-
-struct PBRSettings {
- public:
-  float metallic;
-  float roughness;
-  float reflectance;
-  float padding;
-  float base_color[4];
-
- private:
-  bool base_color_texture;
-  char padding1[3];
-  bool normal_texture;
-  char padding2[3];
-  bool metallic_texture;
-  char padding3[3];
-  bool roughness_texture;
-  char padding4[3];
-  bool reflectance_texture;
-  char padding5[3];
-
-  friend class RendererComponent;
-};
-
-struct PhongSettings {
- public:
-  float color[3];
-};
-
-union MaterialSettings {
-  PBRSettings pbr_settings;
-  PhongSettings phong_settings;
-};
-
-union TextureSettings {
-  PBRTextures pbr_textures;
-};
-
 class Renderer;
 class RendererComponent : public EntityComponent {
  public:

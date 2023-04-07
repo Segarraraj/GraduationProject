@@ -83,29 +83,6 @@ void RR::RendererComponent::Init(const Renderer* renderer,
       renderer->_device->CreateDescriptorHeap(
           &heap_desc, IID_PPV_ARGS(&_srv_descriptor_heaps[i]));
     }    
-  }  
-
-  switch (pipeline_type) {
-    case RR::PipelineTypes::kPipelineType_PBR:
-      settings.pbr_settings.metallic = 0.0f;
-      settings.pbr_settings.roughness = 1.f;
-      settings.pbr_settings.reflectance = 0.5f;
-      settings.pbr_settings.base_color[0] = 1.0f;
-      settings.pbr_settings.base_color[1] = 1.0f;
-      settings.pbr_settings.base_color[2] = 1.0f;
-      settings.pbr_settings.base_color[3] = 1.0f;
-
-      textureSettings.pbr_textures.base_color = -1;
-      textureSettings.pbr_textures.normal = -1;
-      textureSettings.pbr_textures.metallic = -1;
-      textureSettings.pbr_textures.reflectance = -1;
-      textureSettings.pbr_textures.roughness = -1;
-      break;
-    case RR::PipelineTypes::kPipelineType_Phong:
-      settings.phong_settings.color[0] = 1.0f;
-      settings.phong_settings.color[1] = 1.0f;
-      settings.phong_settings.color[2] = 1.0f;
-      break;
   }
 
   _initialized = true;

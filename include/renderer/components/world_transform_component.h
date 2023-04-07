@@ -19,7 +19,6 @@ class WorldTransform : public EntityComponent {
   DirectX::XMFLOAT3 right();
   DirectX::XMFLOAT3 up();
 
-
   DirectX::XMFLOAT4X4 world;
 };
 }  // namespace RR

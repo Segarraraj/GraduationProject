@@ -82,7 +82,35 @@ int main(int argc, char** argv) {
   transform->position = {0.0f, 0.5f, -10.0f};
   transform->rotation = {0.0f, 0.0f, 0.0f};
 
-  renderer.LoadFBXScene("../../resources/StormTrooper.fbx");
+  std::shared_ptr<std::vector<RR::MeshData>> meshes =
+    renderer.LoadFBXScene("../../resources/StormTrooper.fbx");
+
+  for (int i = 0; i < meshes.get()->size(); i++) {
+    RR::MeshData* mesh = &meshes.get()->at(i);
+
+    for (int j = 0; j < mesh->geometries.size(); j++) {
+      std::shared_ptr<RR::Entity> ent = renderer.RegisterEntity(
+          RR::ComponentTypes::kComponentType_Renderer |
+          RR::ComponentTypes::kComponentType_WorldTransform);
+
+      std::shared_ptr<RR::WorldTransform> transform =
+          std::static_pointer_cast<RR::WorldTransform>(ent.get()->GetComponent(
+              RR::ComponentTypes::kComponentType_WorldTransform));
+
+      std::shared_ptr<RR::RendererComponent> renderer_c =
+          std::static_pointer_cast<RR::RendererComponent>(
+              ent.get()->GetComponent(
+                  RR::ComponentTypes::kComponentType_Renderer));
+
+      transform->world = mesh->world;
+      renderer_c->geometry = mesh->geometries[j];
+      renderer_c->settings.pbr_settings = mesh->settings[j];
+      renderer_c->textureSettings.pbr_textures = mesh->textures[j];
+
+      renderer_c->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR,
+                       mesh->geometries[j]);
+    }
+  }
 
   renderer.Start();
 
