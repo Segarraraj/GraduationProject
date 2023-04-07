@@ -553,6 +553,7 @@ int32_t RR::Renderer::LoadTexture(const wchar_t* file_name) {
 }
 
 std::shared_ptr<std::vector<RR::MeshData>> RR::Renderer::LoadFBXScene(const char* filename) {
+  printf("\n");
   LOG_DEBUG("RR", "Loading FBX: %s", filename);
   MTR_BEGIN("Renderer", "Load FBX scene");
 
@@ -591,6 +592,8 @@ std::shared_ptr<std::vector<RR::MeshData>> RR::Renderer::LoadFBXScene(const char
   for (int i = 0; i < mesh_count; i++) {
     const ofbx::Mesh& mesh = *scene->getMesh(i);
     const ofbx::Geometry& geom = *mesh.getGeometry();
+    
+    printf("\n");
     LOG_DEBUG("RR", "Mesh %i/%i: %s", i + 1, mesh_count, mesh.name);
 
     const ofbx::Vec3* vertices = geom.getVertices();

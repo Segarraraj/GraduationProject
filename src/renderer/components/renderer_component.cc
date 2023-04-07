@@ -6,10 +6,9 @@
 #include "renderer/renderer.h"
 #include "renderer/graphics/texture.h"
 
-void RR::RendererComponent::Init(const Renderer* renderer, 
-    uint32_t pipeline_type, int geometry) 
-{
+void RR::RendererComponent::Init(const Renderer* renderer, uint32_t pipeline_type) {
   if (_initialized) {
+    LOG_WARNING("RR", "Trying to initialize an initialized renderer component");
     return;
   }
 
@@ -87,7 +86,6 @@ void RR::RendererComponent::Init(const Renderer* renderer,
 
   _initialized = true;
   _pipeline_type = pipeline_type;
-  this->geometry = geometry;
 }
 
 void RR::RendererComponent::CreateResourceViews(

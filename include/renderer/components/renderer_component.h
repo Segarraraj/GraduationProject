@@ -27,7 +27,8 @@ class RendererComponent : public EntityComponent {
   RendererComponent() = default;
   ~RendererComponent() = default;
 
-  void Init(const Renderer* renderer, uint32_t pipeline_type, int geometry);
+  void Init(const Renderer* renderer, uint32_t pipeline_type);
+  void SetGeometry(int32_t geometry);
 
   MaterialSettings settings;
   TextureSettings textureSettings;

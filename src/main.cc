@@ -107,8 +107,7 @@ int main(int argc, char** argv) {
       renderer_c->settings.pbr_settings = mesh->settings[j];
       renderer_c->textureSettings.pbr_textures = mesh->textures[j];
 
-      renderer_c->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR,
-                       mesh->geometries[j]);
+      renderer_c->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR);
     }
   }
 
