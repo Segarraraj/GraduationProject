@@ -12,6 +12,7 @@
 
 struct UserData {
   RR::Renderer* renderer;
+  std::vector<RR::LocalTransform*> lt;
 };
 
 static void update(void* user_data) { 
@@ -56,6 +57,9 @@ static void update(void* user_data) {
                              -0.05f * data->renderer->IsKeyDown('A')));
 
   DirectX::XMStoreFloat3(&transform->position, traslation);
+  for (int i = 0; i < data->lt.size(); i++) {
+    data->lt[i]->rotation.y += data->renderer->delta_time * .1f;
+  }
 }
 
 int main(int argc, char** argv) {
@@ -117,6 +121,8 @@ int main(int argc, char** argv) {
       renderer_c->textureSettings.pbr_textures = mesh->textures[j];
 
       renderer_c->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR);
+
+      data.lt.push_back(transfrom_l.get());
     }
   }
 

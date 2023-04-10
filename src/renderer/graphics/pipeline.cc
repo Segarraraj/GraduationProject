@@ -40,7 +40,7 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
 
   parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
   parameters[0].Descriptor = mvp_cb_descriptor;
-  parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+  parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
   D3D12_ROOT_DESCRIPTOR1 material_cb_descriptor = {};
   material_cb_descriptor.RegisterSpace = 0;

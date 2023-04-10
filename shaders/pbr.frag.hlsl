@@ -3,6 +3,12 @@ SamplerState s1 : register(s0);
 
 static const float PI = 3.14159265359f;
 
+cbuffer MVP : register(b0) {
+  float4x4 model;
+  float4x4 view;
+  float4x4 projection;
+};
+
 cbuffer MaterialParameters : register(b1) {
   float metallic;
   float perceptualRoughness;
@@ -26,7 +32,9 @@ struct VertexOutput {
   float4 position : SV_POSITION;
   float4 worldPos : POSITION;
   float3 normal : NORMAL;
+  float3 worldNormal : WORLD_NORMAL;
   float2 uv : UV;
+  float3x3 tbn : TBN;
 };
 
 // GGX Normal distribution function (NDF)
@@ -65,17 +73,6 @@ float Fd_Burley(float NoV, float NoL, float LoH, float roughness) {
 float Fd_Lambert() { return 1.0 / PI; }
 
 float4 main(VertexOutput input) : SV_TARGET {
-  // Calculate PBR components
-  float3 N = normalize(input.normal);
-  float3 V = normalize(cameraPos - input.worldPos.xyz);
-  float3 L = normalize(float3(0.0f, 1.0f, -1.0f));
-  float3 H = normalize(V + L);
-
-  float NoV = abs(dot(N, V)) + 1e-5;
-  float NoL = clamp(dot(N, L), 0.0f, 1.0f);
-  float NoH = clamp(dot(N, H), 0.0f, 1.0f);
-  float LoH = clamp(dot(L, H), 0.0f, 1.0f);
-
   // Material parameters remap
   float4 realBaseColor = baseColor;
   if (baseColorTexture) {
@@ -97,10 +94,31 @@ float4 main(VertexOutput input) : SV_TARGET {
     realReflectance = textures[4].Sample(s1, input.uv).r;
   }
 
+  float3 N;
+  if (normalTexture) {
+    N = textures[2].Sample(s1, input.uv).xyz * 2.0f - 1.0f;
+    N = mul(input.tbn, N);
+    N = mul(transpose(model), float4(N, 1.0f)).xyz;
+  } else {
+    N = input.worldNormal;
+  }
+
   float3 diffuseColor = (1.0f - realMetallic) * realBaseColor.rgb;
-  float3 f0 = 0.16f * realReflectance * realReflectance * (1.0f - realMetallic) +
+  float3 f0 =
+      0.16f * realReflectance * realReflectance * (1.0f - realMetallic) +
       realBaseColor.rgb * realMetallic;
   float roughness = realperceptualRoughness * realperceptualRoughness;
+
+  // Calculate PBR components
+  N = normalize(N);
+  float3 V = normalize(cameraPos - input.worldPos.xyz);
+  float3 L = normalize(float3(0.0f, 0.0f, -1.0f));
+  float3 H = normalize(V + L);
+
+  float NoV = abs(dot(N, V)) + 1e-5;
+  float NoL = clamp(dot(N, L), 0.0f, 1.0f);
+  float NoH = clamp(dot(N, H), 0.0f, 1.0f);
+  float LoH = clamp(dot(L, H), 0.0f, 1.0f);
 
   // PBR
   float D = D_GGX(NoH, roughness);
@@ -114,5 +132,6 @@ float4 main(VertexOutput input) : SV_TARGET {
   float3 Fd = diffuseColor * Fd_Lambert();
   //float3 Fd = diffuseColor * Fd_Burley(NoV, NoL, LoH, roughness);
 
-  return float4((Fd + Fr) * float3(1.0f, 1.0f, 1.0f) * NoL, realBaseColor.a);
+  //return float4(N, 1.0f);
+  return float4((Fd + Fr) * float3(1.0f, 1.0f, 1.0f), realBaseColor.a);
 }
