@@ -545,8 +545,8 @@ int32_t RR::Renderer::LoadTexture(const wchar_t* file_name) {
       continue;
     }
 
-    _textures[i].Init(_device, file_name);
-    return i;
+    int result = _textures[i].Init(_device, file_name);
+    return result != -1 ? i : -1;
   }
 
   return -1;
@@ -620,7 +620,11 @@ std::shared_ptr<std::vector<RR::MeshData>> RR::Renderer::LoadFBXScene(const char
 
     std::list<std::pair<int, RR::GeometryData>> material_data(0);
 
-    int vertex_offset = 3 + (has_normals ? 3 : 0) + (has_tangents ? 3 : 0) + (has_uvs ? 2 : 0);
+    int normals_offset = (has_normals ? 3 : 0);
+    int tangents_offset = normals_offset + (has_tangents || has_uvs ? 3 : 0);
+    int uvs_offset = tangents_offset + (has_uvs ? 3 : 0);
+
+    int vertex_offset = 3 + (has_normals ? 3 : 0) + (has_tangents || has_uvs ? 3 : 0) + (has_uvs ? 2 : 0);
 
     int material_index = 0;
     int previous_count = 0;
@@ -654,32 +658,68 @@ std::shared_ptr<std::vector<RR::MeshData>> RR::Renderer::LoadFBXScene(const char
         data->vertex_data[k * vertex_offset + 2] = (float)vertices[previous_submesh_vertex_count + k].z;
 
         if (has_normals) {
-          data->vertex_data[k * vertex_offset + 3] = (float)normals[previous_submesh_vertex_count + k].x;
-          data->vertex_data[k * vertex_offset + 4] = (float)normals[previous_submesh_vertex_count + k].y;
-          data->vertex_data[k * vertex_offset + 5] = (float)normals[previous_submesh_vertex_count + k].z;
+          data->vertex_data[k * vertex_offset + normals_offset] = (float)normals[previous_submesh_vertex_count + k].x;
+          data->vertex_data[k * vertex_offset + normals_offset + 1] = (float)normals[previous_submesh_vertex_count + k].y;
+          data->vertex_data[k * vertex_offset + normals_offset + 2] = (float)normals[previous_submesh_vertex_count + k].z;
         }
 
         if (has_tangents) {
-          data->vertex_data[k * vertex_offset + 6] = (float)tangents[previous_submesh_vertex_count + k].x;
-          data->vertex_data[k * vertex_offset + 7] = (float)tangents[previous_submesh_vertex_count + k].y;
-          data->vertex_data[k * vertex_offset + 8] = (float)tangents[previous_submesh_vertex_count + k].z;
+          data->vertex_data[k * vertex_offset + tangents_offset] = (float)tangents[previous_submesh_vertex_count + k].x;
+          data->vertex_data[k * vertex_offset + tangents_offset + 1] = (float)tangents[previous_submesh_vertex_count + k].y;
+          data->vertex_data[k * vertex_offset + tangents_offset + 2] = (float)tangents[previous_submesh_vertex_count + k].z;
+        } else if (has_uvs && k % 3 == 0 && k != 0) {
+          const ofbx::Vec3 p1 = vertices[previous_submesh_vertex_count + k - 2];
+          const ofbx::Vec3 p2 = vertices[previous_submesh_vertex_count + k - 1];
+          const ofbx::Vec3 p3 = vertices[previous_submesh_vertex_count + k - 0];
+        
+          const ofbx::Vec2 uv1 = uvs[previous_submesh_vertex_count + k - 2];
+          const ofbx::Vec2 uv2 = uvs[previous_submesh_vertex_count + k - 1];
+          const ofbx::Vec2 uv3 = uvs[previous_submesh_vertex_count + k - 0];
+
+          float edge1x = (float)p2.x - p1.x;
+          float edge1y = (float)p2.y - p1.y;
+          float edge1z = (float)p2.z - p1.z;
+
+          float edge2x = (float)p3.x - p1.x;
+          float edge2y = (float)p3.y - p1.y;
+          float edge2z = (float)p3.z - p1.z;
+
+          float deltaUV1x = (float)uv2.x - uv1.x;
+          float deltaUV1y = (float)uv2.y - uv1.y;
+
+          float deltaUV2x = (float)uv3.x - uv1.x;
+          float deltaUV2y = (float)uv3.y - uv1.y;
+
+          float f = 1.0f / (deltaUV1x * deltaUV2y - deltaUV2x * deltaUV1y);
+
+          float tangentX = f * (deltaUV2y * edge1x - deltaUV1y * edge2x);
+          float tangentY = f * (deltaUV2y * edge1y - deltaUV1y * edge2y);
+          float tangentZ = f * (deltaUV2y * edge1z - deltaUV1y * edge2z);
+
+          data->vertex_data[k * vertex_offset + tangents_offset] = tangentX;
+          data->vertex_data[k * vertex_offset + tangents_offset + 1] = tangentY;
+          data->vertex_data[k * vertex_offset + tangents_offset + 2] = tangentZ;
+
+          data->vertex_data[(k - 1) * vertex_offset + tangents_offset] = tangentX;
+          data->vertex_data[(k - 1) * vertex_offset + tangents_offset + 1] = tangentY;
+          data->vertex_data[(k - 1) * vertex_offset + tangents_offset + 2] = tangentZ;
+
+          data->vertex_data[(k - 2) * vertex_offset + tangents_offset] = tangentX;
+          data->vertex_data[(k - 2) * vertex_offset + tangents_offset + 1] = tangentY;
+          data->vertex_data[(k - 2) * vertex_offset + tangents_offset + 2] = tangentZ;
         }
 
-        // FIXME: uvs don't start on the 9th float with geometries that don't
-        // have tangetnts :) asme for tangents normals, whatever
         if (has_uvs) {
-          data->vertex_data[k * vertex_offset + 9] = (float)uvs[previous_submesh_vertex_count + k].x;
-          data->vertex_data[k * vertex_offset + 10] = 1.0f - (float)uvs[previous_submesh_vertex_count + k].y;
+          data->vertex_data[k * vertex_offset + uvs_offset] = (float)uvs[previous_submesh_vertex_count + k].x;
+          data->vertex_data[k * vertex_offset + uvs_offset + 1] = 1.0f - (float)uvs[previous_submesh_vertex_count + k].y;
         }
       }
       
       previous_submesh_vertex_count += data->index_data.size();
 
       uint32_t geometry_type = RR::GeometryTypes::kGeometryType_None;
-      if (has_normals && has_uvs && has_tangents) {
+      if (has_normals && has_uvs) {
         geometry_type = RR::GeometryTypes::kGeometryType_Positions_Normals_Tangents_UV;
-      } else if (has_normals && has_uvs) {
-        geometry_type = RR::GeometryTypes::kGeometryType_Positions_Normals_UV;
       } else if (has_normals) {
         geometry_type = RR::GeometryTypes::kGeometryType_Positions_Normals;
       }
@@ -744,9 +784,9 @@ std::shared_ptr<std::vector<RR::MeshData>> RR::Renderer::LoadFBXScene(const char
             char* appended_name = strcat(resources, texture_name);
             mbstowcs(real_texture_name, appended_name, 256);
             texture_handle = LoadTexture(real_texture_name);
+            loaded_textures[texture_name] = texture_handle;
             ZeroMemory(real_texture_name, 256);
             ZeroMemory(texture_name, 128);
-            loaded_textures[texture_name] = texture_handle;
           }
 
           switch (k) {
@@ -1035,7 +1075,7 @@ void RR::Renderer::UpdatePipeline() {
     DirectX::XMStoreFloat4x4(&mvp.view, DirectX::XMMatrixTranspose(view));
     DirectX::XMStoreFloat4x4(&mvp.projection, DirectX::XMMatrixTranspose(projection));
     DirectX::XMStoreFloat4x4(&mvp.model, DirectX::XMMatrixTranspose(DirectX::XMLoadFloat4x4(&world_transform->world)));
-    renderer->Update(mvp, _current_frame);
+    renderer->SetMVP(mvp, _current_frame);
     render_list[renderer->_pipeline_type].push_back(renderer);
   }
   MTR_END("Renderer", "Populate render list");
@@ -1105,40 +1145,40 @@ void RR::Renderer::UpdatePipeline() {
       }          
     }
     
-    for (std::list<std::shared_ptr<RendererComponent>>::iterator j = i->second.begin();
-         j != i->second.end(); j++) {
-
-      if (j->get()->geometry < 0 || j->get()->geometry > _geometries.size()) {
-        LOG_WARNING("RR", "Renderer has invalid geometry");
-        continue;
-      }
-
-      if (pipeline.GeometryType() != _geometries[j->get()->geometry].Type()) {
-        LOG_WARNING("RR", "Traying to draw geometry with incompatible pipeline");
-        continue;
-      }
-
-      j->get()->CreateResourceViews(_device, _textures, _current_frame);
-
-      _command_list->IASetVertexBuffers(0, 1, _geometries[j->get()->geometry].VertexView());
-      _command_list->IASetIndexBuffer(_geometries[j->get()->geometry].IndexView());
-      _command_list->SetGraphicsRootConstantBufferView(0, j->get()->MVPConstantBufferView(_current_frame));
-      _command_list->SetGraphicsRootConstantBufferView(1, j->get()->MaterialConstantBufferView(_current_frame));
-      
-     switch (i->first) {
-        case RR::PipelineTypes::kPipelineType_PBR: {
-          ID3D12DescriptorHeap* descriptor_heaps[] = { 
-            j->get()->_srv_descriptor_heaps[_current_frame] 
-          };
-
-          _command_list->SetDescriptorHeaps(1, descriptor_heaps);
-          _command_list->SetGraphicsRootDescriptorTable(
-              3, descriptor_heaps[0]->GetGPUDescriptorHandleForHeapStart());
-          break;
+    for (std::list<std::shared_ptr<RendererComponent>>::iterator j = i->second.begin(); j != i->second.end(); j++) {
+      for (size_t k = 0; k < j->get()->geometries.size(); k++) {
+        int32_t geometry = j->get()->geometries[k];
+        if (geometry < 0 || geometry > _geometries.size()) {
+          LOG_WARNING("RR", "Renderer has invalid geometry");
+          continue;
         }
-      }
 
-      _command_list->DrawIndexedInstanced(_geometries[j->get()->geometry].Indices(), 1, 0, 0, 0);
+        if (pipeline.GeometryType() != _geometries[geometry].Type()) {
+          LOG_WARNING("RR", "Traying to draw geometry with incompatible pipeline");
+          continue;
+        }
+
+        j->get()->Update(_device, _textures, _current_frame, k);
+
+        _command_list->IASetVertexBuffers(0, 1, _geometries[geometry].VertexView());
+        _command_list->IASetIndexBuffer(_geometries[geometry].IndexView());
+        _command_list->SetGraphicsRootConstantBufferView(0, j->get()->MVPConstantBufferView(_current_frame));
+        _command_list->SetGraphicsRootConstantBufferView(1, j->get()->MaterialConstantBufferView(_current_frame));
+
+        switch (i->first) {
+          case RR::PipelineTypes::kPipelineType_PBR: {
+            ID3D12DescriptorHeap* descriptor_heaps[] = {
+              j->get()->_srv_descriptor_heaps[_current_frame]
+            };
+
+            _command_list->SetDescriptorHeaps(1, descriptor_heaps);
+            _command_list->SetGraphicsRootDescriptorTable(3, descriptor_heaps[0]->GetGPUDescriptorHandleForHeapStart());
+            break;
+          }
+        }
+
+        _command_list->DrawIndexedInstanced(_geometries[geometry].Indices(), 1, 0, 0, 0);
+      } 
     }
   }
   MTR_END("Renderer", "Populate command list");
