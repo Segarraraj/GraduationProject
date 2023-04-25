@@ -112,7 +112,7 @@ float4 main(VertexOutput input) : SV_TARGET {
   // Calculate PBR components
   N = normalize(N);
   float3 V = normalize(cameraPos - input.worldPos.xyz);
-  float3 L = normalize(float3(0.0f, 0.0f, -1.0f));
+  float3 L = normalize(float3(0.0f, 1.0f, 0.0f));
   float3 H = normalize(V + L);
 
   float NoV = abs(dot(N, V)) + 1e-5;
@@ -133,5 +133,5 @@ float4 main(VertexOutput input) : SV_TARGET {
   //float3 Fd = diffuseColor * Fd_Burley(NoV, NoL, LoH, roughness);
 
   //return float4(N, 1.0f);
-  return float4((Fd + Fr) * float3(1.0f, 1.0f, 1.0f), realBaseColor.a);
+  return float4((Fd + Fr) * float3(1.0f, 1.0f, 1.0f) * NoL, realBaseColor.a);
 }
