@@ -12,7 +12,6 @@
 
 struct UserData {
   RR::Renderer* renderer;
-  std::vector<RR::LocalTransform*> lt;
 };
 
 static void update(void* user_data) { 
@@ -57,9 +56,6 @@ static void update(void* user_data) {
                              -0.05f * data->renderer->IsKeyDown('A')));
 
   DirectX::XMStoreFloat3(&transform->position, traslation);
-  for (int i = 0; i < data->lt.size(); i++) {
-    data->lt[i]->rotation.y += data->renderer->delta_time * .1f;
-  }
 }
 
 int main(int argc, char** argv) {
@@ -87,42 +83,35 @@ int main(int argc, char** argv) {
   transform->rotation = {0.0f, 0.0f, 0.0f};
 
   std::shared_ptr<std::vector<RR::MeshData>> meshes =
-    renderer.LoadFBXScene("../../resources/StormTrooper.fbx");
+    renderer.LoadFBXScene("../../resources/BistroExterior.fbx");
 
   for (int i = 0; i < meshes.get()->size(); i++) {
     RR::MeshData* mesh = &meshes.get()->at(i);
 
-    for (int j = 0; j < mesh->geometries.size(); j++) {
-      std::shared_ptr<RR::Entity> ent = renderer.RegisterEntity(
-          RR::ComponentTypes::kComponentType_Renderer |
-          RR::ComponentTypes::kComponentType_WorldTransform | 
-          RR::ComponentTypes::kComponentType_LocalTransform);
+    std::shared_ptr<RR::Entity> ent = renderer.RegisterEntity(
+        RR::ComponentTypes::kComponentType_Renderer |
+        RR::ComponentTypes::kComponentType_WorldTransform);
 
-      std::shared_ptr<RR::WorldTransform> transform =
-          std::static_pointer_cast<RR::WorldTransform>(ent.get()->GetComponent(
-              RR::ComponentTypes::kComponentType_WorldTransform));
+    std::shared_ptr<RR::WorldTransform> transform =
+        std::static_pointer_cast<RR::WorldTransform>(ent.get()->GetComponent(
+            RR::ComponentTypes::kComponentType_WorldTransform));
 
-      std::shared_ptr<RR::RendererComponent> renderer_c =
-          std::static_pointer_cast<RR::RendererComponent>(
-              ent.get()->GetComponent(RR::ComponentTypes::kComponentType_Renderer));
+    std::shared_ptr<RR::RendererComponent> renderer_c =
+        std::static_pointer_cast<RR::RendererComponent>(ent.get()->GetComponent(
+            RR::ComponentTypes::kComponentType_Renderer));
 
-      std::shared_ptr<RR::LocalTransform> transfrom_l =
-          std::static_pointer_cast<RR::LocalTransform>(ent.get()->GetComponent(
-              RR::ComponentTypes::kComponentType_LocalTransform));
+    renderer_c->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR);
 
-      transform->world = mesh->world;
-      
-      transfrom_l->position = mesh->position;
-      transfrom_l->rotation = mesh->rotation;
-      transfrom_l->scale = mesh->scale;
+    renderer_c->geometries.resize(mesh->geometries.size());
+    renderer_c->settings.resize(mesh->geometries.size());
+    renderer_c->textureSettings.resize(mesh->geometries.size());
 
-      renderer_c->geometry = mesh->geometries[j];
-      renderer_c->settings.pbr_settings = mesh->settings[j];
-      renderer_c->textureSettings.pbr_textures = mesh->textures[j];
+    transform->world = mesh->world;
 
-      renderer_c->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR);
-
-      data.lt.push_back(transfrom_l.get());
+    for (int j = 0; j < mesh->geometries.size(); j++) {  
+      renderer_c->geometries[j] = mesh->geometries[j];
+      renderer_c->settings[j].pbr_settings = mesh->settings[j];
+      renderer_c->textureSettings[j].pbr_textures = mesh->textures[j];
     }
   }
 

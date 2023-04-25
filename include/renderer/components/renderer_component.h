@@ -28,11 +28,10 @@ class RendererComponent : public EntityComponent {
   ~RendererComponent() = default;
 
   void Init(const Renderer* renderer, uint32_t pipeline_type);
-  void SetGeometry(int32_t geometry);
 
-  MaterialSettings settings;
-  TextureSettings textureSettings;
-  int32_t geometry = -1;
+  std::vector<int32_t> geometries;
+  std::vector<MaterialSettings> settings;
+  std::vector<TextureSettings> textureSettings;
  private:
   uint32_t _pipeline_type = 0U;
   bool _initialized = false;
@@ -41,12 +40,11 @@ class RendererComponent : public EntityComponent {
   std::vector<ID3D12Resource*> _material_constant_buffers;
   std::vector<ID3D12DescriptorHeap*> _srv_descriptor_heaps;
   
-  void Update(const MVPStruct& mvp, uint32_t frame);
+  void SetMVP(const MVPStruct& mvp, uint32_t frame);
+  void Update(ID3D12Device* device, std::vector<GFX::Texture>& textures, uint32_t frame, uint32_t geometry);
+
   uint64_t MVPConstantBufferView(uint32_t frame); 
-  uint64_t MaterialConstantBufferView(uint32_t frame); 
-  void CreateResourceViews(ID3D12Device* device, 
-                           std::vector<GFX::Texture>& textures, 
-                           uint32_t frame);
+  uint64_t MaterialConstantBufferView(uint32_t frame);
 
   friend class Renderer;
 };

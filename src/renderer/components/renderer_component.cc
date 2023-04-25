@@ -16,6 +16,10 @@ void RR::RendererComponent::Init(const Renderer* renderer, uint32_t pipeline_typ
   _material_constant_buffers = std::vector<ID3D12Resource*>(renderer->kSwapchainBufferCount);
   _srv_descriptor_heaps = std::vector<ID3D12DescriptorHeap*>(renderer->kSwapchainBufferCount);
 
+  geometries = std::vector<int32_t>(0);
+  settings = std::vector<MaterialSettings>(0);
+  textureSettings = std::vector<TextureSettings>(0);
+
   D3D12_HEAP_PROPERTIES mvp_cb_properties = {};
   mvp_cb_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
   mvp_cb_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
@@ -79,85 +83,12 @@ void RR::RendererComponent::Init(const Renderer* renderer, uint32_t pipeline_typ
         IID_PPV_ARGS(&_material_constant_buffers[i]));
 
     if (heap_desc.NumDescriptors != 0) {
-      renderer->_device->CreateDescriptorHeap(
-          &heap_desc, IID_PPV_ARGS(&_srv_descriptor_heaps[i]));
+      result = renderer->_device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&_srv_descriptor_heaps[i]));
     }    
   }
 
   _initialized = true;
   _pipeline_type = pipeline_type;
-}
-
-void RR::RendererComponent::CreateResourceViews(
-    ID3D12Device* device, std::vector<GFX::Texture>& textures, uint32_t frame) {
-  switch (_pipeline_type) {
-    case RR::PipelineTypes::kPipelineType_PBR: {
-      settings.pbr_settings.base_color_texture = 
-          textureSettings.pbr_textures.base_color != -1;
-      
-      settings.pbr_settings.metallic_texture = 
-          textureSettings.pbr_textures.metallic != -1;
-      
-      settings.pbr_settings.normal_texture = 
-          textureSettings.pbr_textures.normal != -1;
-
-      settings.pbr_settings.roughness_texture = 
-          textureSettings.pbr_textures.roughness != -1;
-
-      settings.pbr_settings.reflectance_texture = 
-          textureSettings.pbr_textures.reflectance != -1;
-
-      unsigned int descriptor_size = device->GetDescriptorHandleIncrementSize(
-          D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-      D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle(
-          _srv_descriptor_heaps[frame]->GetCPUDescriptorHandleForHeapStart());
-
-      if (settings.pbr_settings.base_color_texture) {
-        textures[textureSettings.pbr_textures.base_color].CreateResourceView(
-            device, descriptor_handle);
-      } else {
-        textures[0].CreateResourceView(device, descriptor_handle);
-      }
-
-      descriptor_handle.ptr += descriptor_size;
-
-      if (settings.pbr_settings.metallic_texture) {
-        textures[textureSettings.pbr_textures.metallic].CreateResourceView(
-            device, descriptor_handle);
-      } else {
-        textures[0].CreateResourceView(device, descriptor_handle);
-      }
-
-      descriptor_handle.ptr += descriptor_size;
-
-      if (settings.pbr_settings.normal_texture) {
-        textures[textureSettings.pbr_textures.normal].CreateResourceView(
-            device, descriptor_handle);
-      } else {
-        textures[0].CreateResourceView(device, descriptor_handle);
-      }
-
-      descriptor_handle.ptr += descriptor_size;
-
-      if (settings.pbr_settings.roughness_texture) {
-        textures[textureSettings.pbr_textures.roughness].CreateResourceView(
-            device, descriptor_handle);
-      } else {
-        textures[0].CreateResourceView(device, descriptor_handle);
-      }
-
-      descriptor_handle.ptr += descriptor_size;
-
-      if (settings.pbr_settings.reflectance_texture) {
-        textures[textureSettings.pbr_textures.reflectance].CreateResourceView(
-            device, descriptor_handle);
-      } else {
-        textures[0].CreateResourceView(device, descriptor_handle);
-      }
-      break;
-    }      
-  }
 }
 
 uint64_t RR::RendererComponent::MVPConstantBufferView(uint32_t frame) {
@@ -168,22 +99,81 @@ uint64_t RR::RendererComponent::MaterialConstantBufferView(uint32_t frame) {
   return _material_constant_buffers[frame]->GetGPUVirtualAddress();
 }
 
-void RR::RendererComponent::Update(const MVPStruct& mvp, uint32_t frame) {
+void RR::RendererComponent::SetMVP(const MVPStruct& mvp, uint32_t frame) {
   UINT* buffer_start = nullptr;
   _mvp_constant_buffers[frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
   memcpy(buffer_start, &mvp, sizeof(RR::MVPStruct));
   _mvp_constant_buffers[frame]->Unmap(0, nullptr);
+}
 
-  switch (_pipeline_type) { 
-    case RR::PipelineTypes::kPipelineType_PBR:
+void RR::RendererComponent::Update(ID3D12Device* device,
+                                   std::vector<GFX::Texture>& textures,
+                                   uint32_t frame, uint32_t geometry) {
+
+  //TODO CHECK GEOMETRY bounds
+  UINT* buffer_start = nullptr;
+  switch (_pipeline_type) {
+    case RR::PipelineTypes::kPipelineType_PBR: {
       _material_constant_buffers[frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
-      memcpy(buffer_start, &this->settings.pbr_settings, sizeof(RR::PBRSettings));
+      memcpy(buffer_start, &this->settings[geometry].pbr_settings, sizeof(RR::PBRSettings));
+      _material_constant_buffers[frame]->Unmap(0, nullptr);
+
+      settings[geometry].pbr_settings.base_color_texture = textureSettings[geometry].pbr_textures.base_color != -1;
+      settings[geometry].pbr_settings.metallic_texture = textureSettings[geometry].pbr_textures.metallic != -1;
+      settings[geometry].pbr_settings.normal_texture = textureSettings[geometry].pbr_textures.normal != -1;
+      settings[geometry].pbr_settings.roughness_texture = textureSettings[geometry].pbr_textures.roughness != -1;
+      settings[geometry].pbr_settings.reflectance_texture = textureSettings[geometry].pbr_textures.reflectance != -1;
+
+      unsigned int descriptor_size = device->GetDescriptorHandleIncrementSize(
+          D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+      D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle(
+          _srv_descriptor_heaps[frame]->GetCPUDescriptorHandleForHeapStart());
+
+      if (settings[geometry].pbr_settings.base_color_texture) {
+        textures[textureSettings[geometry].pbr_textures.base_color].CreateResourceView( device, descriptor_handle);
+      } else {
+        textures[0].CreateResourceView(device, descriptor_handle);
+      }
+
+      descriptor_handle.ptr += descriptor_size;
+
+      if (settings[geometry].pbr_settings.metallic_texture) {
+        textures[textureSettings[geometry].pbr_textures.metallic].CreateResourceView(device, descriptor_handle);
+      } else {
+        textures[0].CreateResourceView(device, descriptor_handle);
+      }
+
+      descriptor_handle.ptr += descriptor_size;
+
+      if (settings[geometry].pbr_settings.normal_texture) {
+        textures[textureSettings[geometry].pbr_textures.normal].CreateResourceView(device, descriptor_handle);
+      } else {
+        textures[0].CreateResourceView(device, descriptor_handle);
+      }
+
+      descriptor_handle.ptr += descriptor_size;
+
+      if (settings[geometry].pbr_settings.roughness_texture) {
+        textures[textureSettings[geometry].pbr_textures.roughness].CreateResourceView(device, descriptor_handle);
+      } else {
+        textures[0].CreateResourceView(device, descriptor_handle);
+      }
+
+      descriptor_handle.ptr += descriptor_size;
+
+      if (settings[geometry].pbr_settings.reflectance_texture) {
+        textures[textureSettings[geometry].pbr_textures.reflectance].CreateResourceView(device, descriptor_handle);
+      } else {
+        textures[0].CreateResourceView(device, descriptor_handle);
+      }
+      break;
+    }
+    case RR::PipelineTypes::kPipelineType_Phong: {
+      _material_constant_buffers[frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
+      memcpy(buffer_start, &this->settings[geometry].phong_settings, sizeof(RR::PhongSettings));
       _material_constant_buffers[frame]->Unmap(0, nullptr);
       break;
-    case RR::PipelineTypes::kPipelineType_Phong:
-      _material_constant_buffers[frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
-      memcpy(buffer_start, &this->settings.phong_settings, sizeof(RR::PhongSettings));
-      _material_constant_buffers[frame]->Unmap(0, nullptr);
-      break;
+    }
   }
 }
