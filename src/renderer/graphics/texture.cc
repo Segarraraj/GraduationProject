@@ -199,7 +199,7 @@ static int LoadImageDataFromFile(std::vector<unsigned char>* image_data,
                                               WICDecodeMetadataCacheOnLoad,
                                               &decoder);
   if (FAILED(result)) {
-      LOG_ERROR("RR::GFX", "Couldn't create descriptor");
+      LOG_ERROR("RR::GFX", "Couldn't create decoder for texture: %S", filename);
     return -1;
   }
 
@@ -292,12 +292,16 @@ static int LoadImageDataFromFile(std::vector<unsigned char>* image_data,
 
 int RR::GFX::Texture::Init(ID3D12Device* device, const wchar_t* file_name) {
   if (_initialized || file_name == nullptr || device == nullptr) {
-    return 1;
+    return -1;
   }
 
   _texture_desc = std::make_unique<D3D12_RESOURCE_DESC>();
   _image_size = LoadImageDataFromFile(&_texture_data, _texture_desc.get(),
                                       file_name, &_image_byte_row);
+
+  if (_image_size == -1) {
+    return -1;
+  }
 
   HRESULT result = {};
 
