@@ -100,11 +100,7 @@ int main(int argc, char** argv) {
         std::static_pointer_cast<RR::RendererComponent>(ent.get()->GetComponent(
             RR::ComponentTypes::kComponentType_Renderer));
 
-    renderer_c->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR);
-
-    renderer_c->geometries.resize(mesh->geometries.size());
-    renderer_c->settings.resize(mesh->geometries.size());
-    renderer_c->textureSettings.resize(mesh->geometries.size());
+    renderer_c->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR, mesh->geometries.size());
 
     transform->world = mesh->world;
 

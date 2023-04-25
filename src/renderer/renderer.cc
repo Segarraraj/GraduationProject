@@ -1075,7 +1075,7 @@ void RR::Renderer::UpdatePipeline() {
     DirectX::XMStoreFloat4x4(&mvp.view, DirectX::XMMatrixTranspose(view));
     DirectX::XMStoreFloat4x4(&mvp.projection, DirectX::XMMatrixTranspose(projection));
     DirectX::XMStoreFloat4x4(&mvp.model, DirectX::XMMatrixTranspose(DirectX::XMLoadFloat4x4(&world_transform->world)));
-    renderer->SetMVP(mvp, _current_frame);
+    renderer->SetMVP(mvp);
     render_list[renderer->_pipeline_type].push_back(renderer);
   }
   MTR_END("Renderer", "Populate render list");
@@ -1158,17 +1158,17 @@ void RR::Renderer::UpdatePipeline() {
           continue;
         }
 
-        j->get()->Update(_device, _textures, _current_frame, k);
+        j->get()->Update(_device, _textures, k);
 
         _command_list->IASetVertexBuffers(0, 1, _geometries[geometry].VertexView());
         _command_list->IASetIndexBuffer(_geometries[geometry].IndexView());
-        _command_list->SetGraphicsRootConstantBufferView(0, j->get()->MVPConstantBufferView(_current_frame));
-        _command_list->SetGraphicsRootConstantBufferView(1, j->get()->MaterialConstantBufferView(_current_frame));
+        _command_list->SetGraphicsRootConstantBufferView(0, j->get()->MVPConstantBufferView());
+        _command_list->SetGraphicsRootConstantBufferView(1, j->get()->MaterialConstantBufferView());
 
-        switch (i->first) {
+        switch (pipeline.Type()) {
           case RR::PipelineTypes::kPipelineType_PBR: {
             ID3D12DescriptorHeap* descriptor_heaps[] = {
-              j->get()->_srv_descriptor_heaps[_current_frame]
+                j->get()->SRVDescriptorHeap(k)
             };
 
             _command_list->SetDescriptorHeaps(1, descriptor_heaps);
@@ -1297,6 +1297,7 @@ void RR::Renderer::WaitForPreviousFrame() {
   if (_fences[_current_frame]->GetCompletedValue() != 1) {
     _fences[_current_frame]->SetEventOnCompletion(1, _fence_event);
     WaitForSingleObject(_fence_event, INFINITE);
+    _fences[_current_frame]->Signal(0);
   }
 }
 

@@ -6,19 +6,17 @@
 #include "renderer/renderer.h"
 #include "renderer/graphics/texture.h"
 
-void RR::RendererComponent::Init(const Renderer* renderer, uint32_t pipeline_type) {
+void RR::RendererComponent::Init(const Renderer* renderer, uint32_t pipeline_type, uint32_t geometries) {
   if (_initialized) {
     LOG_WARNING("RR", "Trying to initialize an initialized renderer component");
     return;
   }
 
-  _mvp_constant_buffers = std::vector<ID3D12Resource*>(renderer->kSwapchainBufferCount);
-  _material_constant_buffers = std::vector<ID3D12Resource*>(renderer->kSwapchainBufferCount);
-  _srv_descriptor_heaps = std::vector<ID3D12DescriptorHeap*>(renderer->kSwapchainBufferCount);
+  _srv_descriptor_heaps = std::vector<ID3D12DescriptorHeap*>(geometries);
 
-  geometries = std::vector<int32_t>(0);
-  settings = std::vector<MaterialSettings>(0);
-  textureSettings = std::vector<TextureSettings>(0);
+  this->geometries = std::vector<int32_t>(geometries);
+  settings = std::vector<MaterialSettings>(geometries);
+  textureSettings = std::vector<TextureSettings>(geometries);
 
   D3D12_HEAP_PROPERTIES mvp_cb_properties = {};
   mvp_cb_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -75,48 +73,54 @@ void RR::RendererComponent::Init(const Renderer* renderer, uint32_t pipeline_typ
     HRESULT result = renderer->_device->CreateCommittedResource(
         &mvp_cb_properties, D3D12_HEAP_FLAG_NONE,
         &mvp_cb_desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-        IID_PPV_ARGS(&_mvp_constant_buffers[i]));
+        IID_PPV_ARGS(&_mvp_constant_buffers));
 
     result = renderer->_device->CreateCommittedResource(
         &material_cb_properties, D3D12_HEAP_FLAG_NONE, 
         &material_cb_desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-        IID_PPV_ARGS(&_material_constant_buffers[i]));
+        IID_PPV_ARGS(&_material_constant_buffers));   
+  }
 
-    if (heap_desc.NumDescriptors != 0) {
-      result = renderer->_device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&_srv_descriptor_heaps[i]));
-    }    
+  if (heap_desc.NumDescriptors != 0) {
+    for (size_t i = 0; i < _srv_descriptor_heaps.size(); i++) {
+      renderer->_device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&_srv_descriptor_heaps[i]));
+    }
   }
 
   _initialized = true;
   _pipeline_type = pipeline_type;
 }
 
-uint64_t RR::RendererComponent::MVPConstantBufferView(uint32_t frame) {
-  return _mvp_constant_buffers[frame]->GetGPUVirtualAddress();
+uint64_t RR::RendererComponent::MVPConstantBufferView() {
+  return _mvp_constant_buffers->GetGPUVirtualAddress();
 }
 
-uint64_t RR::RendererComponent::MaterialConstantBufferView(uint32_t frame) {
-  return _material_constant_buffers[frame]->GetGPUVirtualAddress();
+uint64_t RR::RendererComponent::MaterialConstantBufferView() {
+  return _material_constant_buffers->GetGPUVirtualAddress();
 }
 
-void RR::RendererComponent::SetMVP(const MVPStruct& mvp, uint32_t frame) {
+void RR::RendererComponent::SetMVP(const MVPStruct& mvp) {
   UINT* buffer_start = nullptr;
-  _mvp_constant_buffers[frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
+  _mvp_constant_buffers->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
   memcpy(buffer_start, &mvp, sizeof(RR::MVPStruct));
-  _mvp_constant_buffers[frame]->Unmap(0, nullptr);
+  _mvp_constant_buffers->Unmap(0, nullptr);
+}
+
+ID3D12DescriptorHeap* RR::RendererComponent::SRVDescriptorHeap(uint32_t geometry) {
+  return _srv_descriptor_heaps[geometry];
 }
 
 void RR::RendererComponent::Update(ID3D12Device* device,
                                    std::vector<GFX::Texture>& textures,
-                                   uint32_t frame, uint32_t geometry) {
+                                   uint32_t geometry) {
 
   //TODO CHECK GEOMETRY bounds
   UINT* buffer_start = nullptr;
   switch (_pipeline_type) {
     case RR::PipelineTypes::kPipelineType_PBR: {
-      _material_constant_buffers[frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
+      _material_constant_buffers->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
       memcpy(buffer_start, &this->settings[geometry].pbr_settings, sizeof(RR::PBRSettings));
-      _material_constant_buffers[frame]->Unmap(0, nullptr);
+      _material_constant_buffers->Unmap(0, nullptr);
 
       settings[geometry].pbr_settings.base_color_texture = textureSettings[geometry].pbr_textures.base_color != -1;
       settings[geometry].pbr_settings.metallic_texture = textureSettings[geometry].pbr_textures.metallic != -1;
@@ -127,8 +131,7 @@ void RR::RendererComponent::Update(ID3D12Device* device,
       unsigned int descriptor_size = device->GetDescriptorHandleIncrementSize(
           D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-      D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle(
-          _srv_descriptor_heaps[frame]->GetCPUDescriptorHandleForHeapStart());
+      D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle(_srv_descriptor_heaps[geometry]->GetCPUDescriptorHandleForHeapStart());
 
       if (settings[geometry].pbr_settings.base_color_texture) {
         textures[textureSettings[geometry].pbr_textures.base_color].CreateResourceView( device, descriptor_handle);
@@ -170,9 +173,9 @@ void RR::RendererComponent::Update(ID3D12Device* device,
       break;
     }
     case RR::PipelineTypes::kPipelineType_Phong: {
-      _material_constant_buffers[frame]->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
+      _material_constant_buffers->Map(0, nullptr, reinterpret_cast<void**>(&buffer_start));
       memcpy(buffer_start, &this->settings[geometry].phong_settings, sizeof(RR::PhongSettings));
-      _material_constant_buffers[frame]->Unmap(0, nullptr);
+      _material_constant_buffers->Unmap(0, nullptr);
       break;
     }
   }

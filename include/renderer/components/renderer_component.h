@@ -27,8 +27,9 @@ class RendererComponent : public EntityComponent {
   RendererComponent() = default;
   ~RendererComponent() = default;
 
-  void Init(const Renderer* renderer, uint32_t pipeline_type);
+  void Init(const Renderer* renderer, uint32_t pipeline_type, uint32_t geometries);
 
+  // This is dangerous, client can resize
   std::vector<int32_t> geometries;
   std::vector<MaterialSettings> settings;
   std::vector<TextureSettings> textureSettings;
@@ -36,15 +37,16 @@ class RendererComponent : public EntityComponent {
   uint32_t _pipeline_type = 0U;
   bool _initialized = false;
 
-  std::vector<ID3D12Resource*> _mvp_constant_buffers;
-  std::vector<ID3D12Resource*> _material_constant_buffers;
+  ID3D12Resource* _mvp_constant_buffers;
+  ID3D12Resource* _material_constant_buffers;
   std::vector<ID3D12DescriptorHeap*> _srv_descriptor_heaps;
   
-  void SetMVP(const MVPStruct& mvp, uint32_t frame);
-  void Update(ID3D12Device* device, std::vector<GFX::Texture>& textures, uint32_t frame, uint32_t geometry);
+  void SetMVP(const MVPStruct& mvp);
+  void Update(ID3D12Device* device, std::vector<GFX::Texture>& textures, uint32_t geometry);
 
-  uint64_t MVPConstantBufferView(uint32_t frame); 
-  uint64_t MaterialConstantBufferView(uint32_t frame);
+  uint64_t MVPConstantBufferView(); 
+  uint64_t MaterialConstantBufferView();
+  ID3D12DescriptorHeap* SRVDescriptorHeap(uint32_t geometry);
 
   friend class Renderer;
 };
