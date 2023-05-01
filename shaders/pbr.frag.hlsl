@@ -103,7 +103,6 @@ float4 main(VertexOutput input) : SV_TARGET {
     N = input.worldNormal;
   }
 
-  float3 diffuseColor = (1.0f - realMetallic) * realBaseColor.rgb;
   float3 f0 =
       0.16f * realReflectance * realReflectance * (1.0f - realMetallic) +
       realBaseColor.rgb * realMetallic;
@@ -125,13 +124,15 @@ float4 main(VertexOutput input) : SV_TARGET {
   float3 F = F_Schlick(LoH, f0);
   float G = V_SmithGGXCorrelated(NoV, NoL, roughness);
 
+  float3 diffuseColor = realBaseColor.rgb * (1.0f - F);
+  diffuseColor *= 1.0f - realMetallic;
+
   // specular BRDF
   float3 Fr = (D * G) * F;
   
-  // diffuse BRDF
-  float3 Fd = diffuseColor * Fd_Lambert();
+  float3 color = diffuseColor * Fd_Lambert() + Fr;
   //float3 Fd = diffuseColor * Fd_Burley(NoV, NoL, LoH, roughness);
 
   //return float4(N, 1.0f);
-  return float4((Fd + Fr) * float3(1.0f, 1.0f, 1.0f) * NoL, realBaseColor.a);
+  return float4(color, realBaseColor.a);
 }
