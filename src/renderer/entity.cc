@@ -7,8 +7,11 @@
 #include "renderer/components/local_transform_component.h"
 #include "renderer/components/world_transform_component.h"
 
-RR::Entity::Entity(uint32_t components) { 
-  for (uint32_t i = 1; i < components; i = (i << 1)) {
+RR::Entity::Entity(uint32_t components) { AddComponents(components); }
+
+void RR::Entity::AddComponents(
+    uint32_t components) {
+  for (uint32_t i = 1; i <= components; i = (i << 1)) {
     if ((components & i) != i) {
       continue;
     }
@@ -30,7 +33,8 @@ RR::Entity::Entity(uint32_t components) {
   }
 }
 
-std::shared_ptr<RR::EntityComponent> RR::Entity::GetComponent(uint32_t component_type) const {
+std::shared_ptr<RR::EntityComponent> RR::Entity::GetComponent(
+    uint32_t component_type) const {
   return _components.count(component_type) != 0 
     ? _components.at(component_type) : nullptr;
 }

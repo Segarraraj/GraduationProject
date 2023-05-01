@@ -17,8 +17,9 @@ uint32_t RR::GFX::Geometry::Stride() const {
     case RR::kGeometryType_Positions_Normals_UV:
       return sizeof(float) * 3 + sizeof(float) * 3 + sizeof(float) * 2;
       break;
-    default:
-      return 0;
+    case RR::kGeometryType_Positions_Normals_Tangents_UV:
+      return sizeof(float) * 3 + sizeof(float) * 3 + sizeof(float) * 3 +
+             sizeof(float) * 2;
       break;
   }
 }
@@ -33,7 +34,7 @@ const D3D12_INDEX_BUFFER_VIEW* RR::GFX::Geometry::IndexView() const {
   return _index_buffer_view.get();
 }
 
-int RR::GFX::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::shared_ptr<RR::GeometryData> data) {
+int RR::GFX::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::unique_ptr<RR::GeometryData>&& data) {
   if (_initialized) {
     return 1;
   }
@@ -57,7 +58,7 @@ int RR::GFX::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::s
   D3D12_RESOURCE_DESC buffer_resource_desc = {};
   buffer_resource_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
   buffer_resource_desc.Alignment = 0;
-  buffer_resource_desc.Width = data->vertex_size;
+  buffer_resource_desc.Width = data->vertex_data.size() * sizeof(float);
   buffer_resource_desc.Height = 1;
   buffer_resource_desc.DepthOrArraySize = 1;
   buffer_resource_desc.MipLevels = 1;
@@ -87,7 +88,7 @@ int RR::GFX::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::s
     return 1;
   }
 
-  buffer_resource_desc.Width = data->index_size;
+  buffer_resource_desc.Width = data->index_data.size() * sizeof(uint32_t);
   result = device->CreateCommittedResource(
       &default_heap_properties, D3D12_HEAP_FLAG_NONE, &buffer_resource_desc,
       D3D12_RESOURCE_STATE_COMMON, nullptr,
@@ -110,22 +111,22 @@ int RR::GFX::Geometry::Init(ID3D12Device* device, uint32_t geometry_type, std::s
 
   _initialized = true;
   _updated = false;
-  _indices = data->index_size / sizeof(uint32_t);
+  _indices = data->index_data.size();
   _type = geometry_type;
   // FIXME: this is not safe as user could release 
   // data->vertex_data or whatever
-  _new_data = data;
+  _new_data = std::make_unique<GeometryData>();
+  _new_data->index_data = data->index_data;
+  _new_data->vertex_data = data->vertex_data;
 
   _vertex_buffer_view = std::make_unique<D3D12_VERTEX_BUFFER_VIEW>();
-  _vertex_buffer_view->BufferLocation =
-      _vertex_default_buffer->GetGPUVirtualAddress();
-  _vertex_buffer_view->SizeInBytes = data->vertex_size;
+  _vertex_buffer_view->BufferLocation = _vertex_default_buffer->GetGPUVirtualAddress();
+  _vertex_buffer_view->SizeInBytes = data->vertex_data.size() * sizeof(float);
   _vertex_buffer_view->StrideInBytes = Stride();
 
   _index_buffer_view = std::make_unique<D3D12_INDEX_BUFFER_VIEW>();
-  _index_buffer_view->BufferLocation =
-      _index_default_buffer->GetGPUVirtualAddress();
-  _index_buffer_view->SizeInBytes = data->index_size;
+  _index_buffer_view->BufferLocation = _index_default_buffer->GetGPUVirtualAddress();
+  _index_buffer_view->SizeInBytes = data->index_data.size() * sizeof(uint32_t);
   _index_buffer_view->Format = DXGI_FORMAT_R32_UINT;
 
   return 0;
@@ -149,12 +150,12 @@ int RR::GFX::Geometry::Update(ID3D12GraphicsCommandList* command_list) {
   // Copy data to upload resource heap
   _vertex_upload_buffer->Map(
       0, nullptr, reinterpret_cast<void**>(&upload_resource_heap_begin));
-  memcpy(upload_resource_heap_begin, _new_data->vertex_data, _new_data->vertex_size);
+  memcpy(upload_resource_heap_begin, _new_data->vertex_data.data(), _new_data->vertex_data.size() * sizeof(float));
   _vertex_upload_buffer->Unmap(0, nullptr);
 
   _index_upload_buffer->Map(
       0, nullptr, reinterpret_cast<void**>(&upload_resource_heap_begin));
-  memcpy(upload_resource_heap_begin, _new_data->index_data, _new_data->index_size);
+  memcpy(upload_resource_heap_begin, _new_data->index_data.data(), _new_data->index_data.size() * sizeof(uint32_t));
   _index_upload_buffer->Unmap(0, nullptr);
 
   D3D12_RESOURCE_BARRIER vb_upload_resource_heap_barrier = {};
@@ -185,6 +186,11 @@ int RR::GFX::Geometry::Update(ID3D12GraphicsCommandList* command_list) {
   command_list->ResourceBarrier(1, &index_upload_resource_heap_barrier);
 
   _updated = true;
+
+  _new_data->vertex_data = std::vector<float>(0);
+  _new_data->index_data = std::vector<uint32_t>(0);
+  _new_data.release();
+  _new_data.reset();
 
   return 0;
 }

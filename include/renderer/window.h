@@ -21,13 +21,19 @@ class Window {
             void* user_data);
   void Show() const;
 
-  const void* window() const;
+  void CaptureMouse();
+  
+  void* window() const;
   uint32_t width() const;
   uint32_t height() const;
+  uint32_t screenCenterX() const;
+  uint32_t screenCenterY() const;
   float aspectRatio() const;
+  bool isCaptureMouse() const;
 
  private:
   void* _window = nullptr;
+  bool _capture_mouse = false;
 };
 }  // names   pace RR
 

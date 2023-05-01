@@ -8,6 +8,8 @@
 #include <memory>
 #include <vector>
 
+#include "common.hpp"
+
 struct ID3D12Device;
 struct IDXGISwapChain3;
 struct ID3D12CommandQueue;
@@ -30,8 +32,10 @@ namespace RR {
 class Window;
 class Entity;
 class Camera;
+class Input;
 struct GeometryData;
 namespace GFX {
+class Texture;
 class Pipeline;
 class Geometry;
 }
@@ -56,17 +60,32 @@ class Renderer {
   void Stop();
   void Resize();
 
+  bool initialized() const;
+
   std::shared_ptr<Entity> MainCamera() const;
   std::shared_ptr<Entity> RegisterEntity(uint32_t component_types);
-  int32_t CreateGeometry(uint32_t geometry_type, std::shared_ptr<GeometryData> data);
+  int32_t CreateGeometry(uint32_t geometry_type, std::unique_ptr<GeometryData>&& data);
+  int32_t LoadTexture(const wchar_t* file_name);
+  std::shared_ptr<std::vector<MeshData>> LoadFBXScene(const char* filename);
 
+  // input
+  void CaptureMouse();
+  int IsKeyDown(char key);
+  void OverrideKey(char key, int value);
+  void OverrideMouse(int mouse_x, int mouse_y);
+  float MouseXAxis();
+  float MouseYAxis();
+
+  // This should be private but windowproc needs acces to it
  private:
   static const uint16_t kSwapchainBufferCount = 3;
 
   std::unique_ptr<RR::Window> _window;
   std::shared_ptr<Entity> _main_camera;
+  std::unique_ptr<RR::Input> _input;
 
   std::vector<GFX::Geometry> _geometries;
+  std::vector<GFX::Texture> _textures;
   std::map<uint32_t, GFX::Pipeline> _pipelines;
 
   // This is memory acces mayhem, 0 cache hits
@@ -76,6 +95,7 @@ class Renderer {
 
   uint16_t _current_frame = 0;
   bool _running = true;
+  bool _initialized = false;
   void (*_update)(void* user_data) = nullptr;
   void* _user_data = nullptr;
 
@@ -83,6 +103,7 @@ class Renderer {
   IDXGISwapChain3* _swap_chain = nullptr;
   ID3D12CommandQueue* _command_queue = nullptr;
   ID3D12DescriptorHeap* _rt_descriptor_heap = nullptr;
+  ID3D12DescriptorHeap* _imgui_descriptor_heap = nullptr;
   ID3D12Resource* _render_targets[kSwapchainBufferCount] = {0};
   ID3D12CommandAllocator* _command_allocators[kSwapchainBufferCount] = {0};
   ID3D12GraphicsCommandList* _command_list = nullptr;
@@ -100,6 +121,7 @@ class Renderer {
   void UpdateGraphicResources();
   void InternalUpdate();
   void UpdatePipeline();
+  void ShowEditor();
   void Render();
   void Cleanup();
   void WaitForPreviousFrame();

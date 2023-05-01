@@ -2,3 +2,5 @@ build
 bin
 shaders/*.dxil
 shaders/*.cso
+resources
+

@@ -30,36 +30,85 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
     root_signature_feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
   }
 
-  std::vector<D3D12_ROOT_PARAMETER1> parameters;
+  std::vector<D3D12_ROOT_PARAMETER1> parameters = std::vector<D3D12_ROOT_PARAMETER1>(2);
+  std::vector<D3D12_STATIC_SAMPLER_DESC> samplers = std::vector<D3D12_STATIC_SAMPLER_DESC>(0);
+
+  D3D12_ROOT_DESCRIPTOR1 mvp_cb_descriptor = {};
+  mvp_cb_descriptor.RegisterSpace = 0;
+  mvp_cb_descriptor.ShaderRegister = 0;
+  mvp_cb_descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+
+  parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+  parameters[0].Descriptor = mvp_cb_descriptor;
+  parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+  D3D12_ROOT_DESCRIPTOR1 material_cb_descriptor = {};
+  material_cb_descriptor.RegisterSpace = 0;
+  material_cb_descriptor.ShaderRegister = 1;
+  material_cb_descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+
+  parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+  parameters[1].Descriptor = material_cb_descriptor;
+  parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
   switch (type) {
-    case RR::kPipelineType_PBR:
-      parameters = std::vector<D3D12_ROOT_PARAMETER1>(1);
+    case RR::kPipelineType_PBR: {
+      parameters.resize(4);
+      samplers.resize(1);
 
-      D3D12_ROOT_DESCRIPTOR1 parameter1_descriptor = {};
-      parameter1_descriptor.RegisterSpace = 0;
-      parameter1_descriptor.ShaderRegister = 0;
-      parameter1_descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+      D3D12_ROOT_CONSTANTS pipeline_constants = {};
+      pipeline_constants.RegisterSpace = 0;
+      pipeline_constants.ShaderRegister = 2;
+      pipeline_constants.Num32BitValues = 4;
 
-      parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-      parameters[0].Descriptor = parameter1_descriptor;
-      parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+      parameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+      parameters[2].Constants = pipeline_constants;
+      parameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+      D3D12_DESCRIPTOR_RANGE1 table_ranges[1] = {};
+      table_ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+      table_ranges[0].NumDescriptors = 5;
+      table_ranges[0].BaseShaderRegister = 0;
+      table_ranges[0].RegisterSpace = 0;
+      table_ranges[0].OffsetInDescriptorsFromTableStart =
+          D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+      D3D12_ROOT_DESCRIPTOR_TABLE1 descriptor_table = {};
+      descriptor_table.NumDescriptorRanges = 1;
+      descriptor_table.pDescriptorRanges = &table_ranges[0];
+
+      parameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+      parameters[3].DescriptorTable = descriptor_table;
+      parameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+      samplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+      samplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+      samplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+      samplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+      samplers[0].MipLODBias = 0;
+      samplers[0].MaxAnisotropy = 0;
+      samplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+      samplers[0].BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+      samplers[0].MinLOD = 0.0f;
+      samplers[0].MaxLOD = D3D12_FLOAT32_MAX;
+      samplers[0].ShaderRegister = 0;
+      samplers[0].RegisterSpace = 0;
+      samplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
       break;
+    }
   }  
 
   D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
   root_signature_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
   root_signature_desc.Desc_1_1.NumParameters = parameters.size();
-  root_signature_desc.Desc_1_1.pParameters = &parameters[0];
-  root_signature_desc.Desc_1_1.NumStaticSamplers = 0;
-  root_signature_desc.Desc_1_1.pStaticSamplers = nullptr;
+  root_signature_desc.Desc_1_1.pParameters = parameters.data();
+  root_signature_desc.Desc_1_1.NumStaticSamplers = samplers.size();
+  root_signature_desc.Desc_1_1.pStaticSamplers = samplers.data();
   root_signature_desc.Desc_1_1.Flags =
       D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
       D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
       D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-      D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-      D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+      D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
   ID3DBlob* signature = nullptr;
   ID3DBlob* error = nullptr;
@@ -68,6 +117,7 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
                                                 &signature, &error);
   if (FAILED(result)) {
     LOG_ERROR("RR::GFX", "Couldn't serialeze root signature");
+    LOG_ERROR("RR::GFX", "Error: %s", error->GetBufferPointer());
     return 1;
   }
 
@@ -90,7 +140,12 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
 
   switch (type) { 
     case RR::PipelineTypes::kPipelineType_PBR:
-      result = D3DCompileFromFile(L"../../shaders/triangle.vert.hlsl", nullptr,
+      result = D3DCompileFromFile(L"../../shaders/pbr.vert.hlsl", nullptr,
+                                  nullptr, "main", "vs_5_1", compile_flags, 0,
+                                  &vertex_shader, &error);
+      break;
+    case RR::PipelineTypes::kPipelineType_Phong:
+      result = D3DCompileFromFile(L"../../shaders/phong.vert.hlsl", nullptr,
                                   nullptr, "main", "vs_5_1", compile_flags, 0,
                                   &vertex_shader, &error);
       break;
@@ -104,7 +159,12 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
 
   switch (type) {
     case RR::PipelineTypes::kPipelineType_PBR:
-      result = D3DCompileFromFile(L"../../shaders/triangle.frag.hlsl", nullptr,
+      result = D3DCompileFromFile(L"../../shaders/pbr.frag.hlsl", nullptr,
+                                  nullptr, "main", "ps_5_1", compile_flags, 0,
+                                  &fragment_shader, &error);
+      break;
+    case RR::PipelineTypes::kPipelineType_Phong:
+      result = D3DCompileFromFile(L"../../shaders/phong.frag.hlsl", nullptr,
                                   nullptr, "main", "ps_5_1", compile_flags, 0,
                                   &fragment_shader, &error);
       break;
@@ -129,10 +189,39 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
   switch (geometry_type) { 
     case RR::GeometryTypes::kGeometryType_Positions_Normals:
       input_layout = std::vector<D3D12_INPUT_ELEMENT_DESC>(2);
-      input_layout[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,
-                         0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
-      input_layout[1] = {"COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT,
-                         0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[1] = {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+      break;
+    case RR::GeometryTypes::kGeometryType_Positions_Normals_UV:
+      input_layout = std::vector<D3D12_INPUT_ELEMENT_DESC>(3);
+
+      input_layout[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[1] = {"NORMAL", 0,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 12,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[2] = {"UV", 0,  DXGI_FORMAT_R32G32_FLOAT, 0, 24,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+      break;
+    case RR::GeometryTypes::kGeometryType_Positions_Normals_Tangents_UV:
+      input_layout = std::vector<D3D12_INPUT_ELEMENT_DESC>(4);
+
+      input_layout[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, 
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[1] = {"NORMAL", 0,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, 
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[2] = {"TANGENT", 0,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 24,
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+
+      input_layout[3] = {"UV", 0,  DXGI_FORMAT_R32G32_FLOAT, 0, 36, 
+                         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
       break;
   }
 
@@ -142,7 +231,7 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
 
   D3D12_RASTERIZER_DESC rasterizer_desc = {};
   rasterizer_desc.FillMode = D3D12_FILL_MODE_SOLID;
-  rasterizer_desc.CullMode = D3D12_CULL_MODE_NONE;
+  rasterizer_desc.CullMode = D3D12_CULL_MODE_BACK;
   rasterizer_desc.FrontCounterClockwise = FALSE;
   rasterizer_desc.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
   rasterizer_desc.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
@@ -226,10 +315,16 @@ void RR::GFX::Pipeline::Release() {
   }
 }
 
-ID3D12PipelineState* RR::GFX::Pipeline::PipelineState() { return _pipeline_state; }
+ID3D12PipelineState* RR::GFX::Pipeline::PipelineState() { 
+  return _pipeline_state; 
+}
 
 ID3D12RootSignature* RR::GFX::Pipeline::RootSignature() {
   return _root_signature;
 }
 
-uint32_t RR::GFX::Pipeline::GeometryType() { return _geometry_type; }
+uint32_t RR::GFX::Pipeline::GeometryType() { 
+  return _geometry_type; 
+}
+
+uint32_t RR::GFX::Pipeline::Type() { return _type; }

@@ -22,6 +22,7 @@ class Pipeline : public GraphicResource {
   ID3D12PipelineState* PipelineState();
   ID3D12RootSignature* RootSignature();
   uint32_t GeometryType(); 
+  uint32_t Type();
 
  private:
   uint32_t _type = 0U;
