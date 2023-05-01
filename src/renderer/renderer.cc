@@ -667,7 +667,7 @@ std::shared_ptr<std::vector<RR::MeshData>> RR::Renderer::LoadFBXScene(const char
           data->vertex_data[k * vertex_offset + tangents_offset] = (float)tangents[previous_submesh_vertex_count + k].x;
           data->vertex_data[k * vertex_offset + tangents_offset + 1] = (float)tangents[previous_submesh_vertex_count + k].y;
           data->vertex_data[k * vertex_offset + tangents_offset + 2] = (float)tangents[previous_submesh_vertex_count + k].z;
-        } else if (has_uvs && k % 3 == 0 && k != 0) {
+        } else if (has_uvs && (k + 1) % 3 == 0) {
           const ofbx::Vec3 p1 = vertices[previous_submesh_vertex_count + k - 2];
           const ofbx::Vec3 p2 = vertices[previous_submesh_vertex_count + k - 1];
           const ofbx::Vec3 p3 = vertices[previous_submesh_vertex_count + k - 0];
@@ -676,21 +676,23 @@ std::shared_ptr<std::vector<RR::MeshData>> RR::Renderer::LoadFBXScene(const char
           const ofbx::Vec2 uv2 = uvs[previous_submesh_vertex_count + k - 1];
           const ofbx::Vec2 uv3 = uvs[previous_submesh_vertex_count + k - 0];
 
-          float edge1x = (float)p2.x - p1.x;
-          float edge1y = (float)p2.y - p1.y;
-          float edge1z = (float)p2.z - p1.z;
+          float edge1x = (float)(p2.x - p1.x);
+          float edge1y = (float)(p2.y - p1.y);
+          float edge1z = (float)(p2.z - p1.z);
 
-          float edge2x = (float)p3.x - p1.x;
-          float edge2y = (float)p3.y - p1.y;
-          float edge2z = (float)p3.z - p1.z;
+          float edge2x = (float)(p3.x - p1.x);
+          float edge2y = (float)(p3.y - p1.y);
+          float edge2z = (float)(p3.z - p1.z);
 
-          float deltaUV1x = (float)uv2.x - uv1.x;
-          float deltaUV1y = (float)uv2.y - uv1.y;
+          float deltaUV1x = (float)(uv2.x - uv1.x);
+          float deltaUV1y = (float)(uv2.y - uv1.y);
 
-          float deltaUV2x = (float)uv3.x - uv1.x;
-          float deltaUV2y = (float)uv3.y - uv1.y;
+          float deltaUV2x = (float)(uv3.x - uv1.x);
+          float deltaUV2y = (float)(uv3.y - uv1.y);
 
-          float f = 1.0f / (deltaUV1x * deltaUV2y - deltaUV2x * deltaUV1y);
+          float f = (deltaUV1x * deltaUV2y - deltaUV2x * deltaUV1y);
+
+          f = 1.0f / (f == 0.0f ? 1.0f : f);
 
           float tangentX = f * (deltaUV2y * edge1x - deltaUV1y * edge2x);
           float tangentY = f * (deltaUV2y * edge1y - deltaUV1y * edge2y);
