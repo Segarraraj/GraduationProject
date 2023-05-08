@@ -163,11 +163,10 @@ static int GetDXGIFormatBitsPerPixel(DXGI_FORMAT& dxgiFormat) {
     return 8;
 }
 
-static int LoadImageDataFromFile(std::vector<unsigned char>* image_data,
+static int LoadImageDataFromFile(DirectX::Image* image,
                                  D3D12_RESOURCE_DESC* resource_description,
-                                 const wchar_t* filename, int* bytes_per_row) {
-  if (image_data == nullptr || resource_description == nullptr || 
-    filename == nullptr || bytes_per_row == nullptr) {
+                                 const wchar_t* filename) {
+  if (image == nullptr || resource_description == nullptr ||  filename == nullptr) {
     return -1;
   }
 
@@ -257,18 +256,19 @@ static int LoadImageDataFromFile(std::vector<unsigned char>* image_data,
   }
 
   int bits_per_pixel = GetDXGIFormatBitsPerPixel(dxgi_format);  // number of bits per pixel
-  *bytes_per_row = (width * bits_per_pixel) / 8;  
-  int image_size = *bytes_per_row * height;
-
-  image_data->resize(image_size);
+  int bytes_per_row = (width * bits_per_pixel) / 8;  
+  int image_size = bytes_per_row * height;
+  
+  // Fixme: hehe
+  image->pixels = (uint8_t*)malloc(image_size);
  
   if (converted) {
-    result = converter->CopyPixels(0, *bytes_per_row, image_size, image_data->data());
+    result = converter->CopyPixels(0, bytes_per_row, image_size, image->pixels);
     if (FAILED(result)) {
       return -1;
     }
   } else {
-    result = frame->CopyPixels(0, *bytes_per_row, image_size, image_data->data());
+    result = frame->CopyPixels(0, bytes_per_row, image_size, image->pixels);
     if (FAILED(result)) {
       return -1;
     }
@@ -287,6 +287,12 @@ static int LoadImageDataFromFile(std::vector<unsigned char>* image_data,
   resource_description->Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
   resource_description->Flags = D3D12_RESOURCE_FLAG_NONE;
 
+  image->format = dxgi_format;
+  image->width = width;
+  image->height = height;
+  image->rowPitch = bytes_per_row;
+  image->slicePitch = 0;
+
   return image_size;
 }
 
@@ -296,14 +302,51 @@ int RR::GFX::Texture::Init(ID3D12Device* device, const wchar_t* file_name) {
   }
 
   _texture_desc = std::make_unique<D3D12_RESOURCE_DESC>();
-  _image_size = LoadImageDataFromFile(&_texture_data, _texture_desc.get(),
-                                      file_name, &_image_byte_row);
+  std::vector<DirectX::Image> images = std::vector<DirectX::Image>(1);
+  DirectX::TexMetadata info;
+  std::unique_ptr<DirectX::ScratchImage> image = std::make_unique<DirectX::ScratchImage>();
 
-  if (_image_size == -1) {
-    return -1;
+  HRESULT hr = {};  
+
+  if (wcsstr(file_name, L".dds") == nullptr) {
+    int result = LoadImageDataFromFile(images.data(), _texture_desc.get(), file_name);
+    if (result == -1) {
+      return -1;
+    }
+  } else {
+    hr = LoadFromDDSFile(file_name, DirectX::DDS_FLAGS_NONE, &info, *image);
+    
+    if (FAILED(hr)) {
+      return -1;
+    }
+
+    _texture_desc->Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    _texture_desc->Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    _texture_desc->Width = info.width;
+    _texture_desc->Height = info.height;
+    _texture_desc->DepthOrArraySize = info.depth;
+    // FIXME: :(
+    _texture_desc->MipLevels = info.mipLevels > 5 ? 5 : info.mipLevels;
+    _texture_desc->Format = info.format;
+    _texture_desc->Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    _texture_desc->SampleDesc.Count = 1;
+    _texture_desc->SampleDesc.Quality = 0;
+    _texture_desc->Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    _texture_desc->Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    images.resize(_texture_desc->MipLevels);
+
+    for (UINT16 i = 0; i < _texture_desc->MipLevels; i++) {
+      const DirectX::Image* img = image->GetImage(i, 0, 0);
+
+      images[i].width = img->width;
+      images[i].height = img->height;
+      images[i].format = img->format;
+      images[i].rowPitch = img->rowPitch;
+      images[i].slicePitch = img->slicePitch;
+      images[i].pixels = img->pixels;
+    }
   }
-
-  HRESULT result = {};
 
   D3D12_HEAP_PROPERTIES default_heap_properties = {};
   default_heap_properties.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -315,21 +358,25 @@ int RR::GFX::Texture::Init(ID3D12Device* device, const wchar_t* file_name) {
   upload_heap_properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
   upload_heap_properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 
-  result = device->CreateCommittedResource(
+  hr = device->CreateCommittedResource(
       &default_heap_properties, D3D12_HEAP_FLAG_NONE, _texture_desc.get(),
       D3D12_RESOURCE_STATE_COMMON, nullptr,
       IID_PPV_ARGS(&_default_buffer));
 
   _default_buffer->SetName(file_name);
 
-  if (FAILED(result)) {
+  if (FAILED(hr)) {
     LOG_ERROR("RR::GFX", "Couldn't create texture default buffer");
     return -1;
   }
 
   UINT64 upload_buffer_size;
-  device->GetCopyableFootprints(_texture_desc.get(), 0, 1, 0, 
-                                nullptr, nullptr, nullptr, 
+  std::vector<UINT> num_rows = std::vector<UINT>(_texture_desc->MipLevels);
+  std::vector<UINT64> row_bytes = std::vector<UINT64>(_texture_desc->MipLevels);
+  D3D12_PLACED_SUBRESOURCE_FOOTPRINT fps[16] = {0};
+  device->GetCopyableFootprints(_texture_desc.get(), 0, 
+                                _texture_desc->MipLevels, 0, 
+                                fps, num_rows.data(), row_bytes.data(), 
                                 &upload_buffer_size);
 
   D3D12_RESOURCE_DESC upload_heap_desc = {};
@@ -345,13 +392,26 @@ int RR::GFX::Texture::Init(ID3D12Device* device, const wchar_t* file_name) {
   upload_heap_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   upload_heap_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-  result = device->CreateCommittedResource(
+  hr = device->CreateCommittedResource(
       &upload_heap_properties, D3D12_HEAP_FLAG_NONE, &upload_heap_desc,
       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&_upload_buffer));
-  if (FAILED(result)) {
+  if (FAILED(hr)) {
     LOG_ERROR("RR::GFX", "Couldn't create upload heap");
     return -1;
   }
+
+  UINT8* upload_resource_heap_begin;
+  _upload_buffer->Map(0, nullptr, reinterpret_cast<void**>(&upload_resource_heap_begin));
+
+  for (uint32_t mip = 0; mip < _texture_desc->MipLevels; mip++) {
+    memcpy(
+      upload_resource_heap_begin + fps[mip].Offset, 
+      images[mip].pixels,
+      images[mip].slicePitch
+    );
+  }
+
+  _upload_buffer->Unmap(0, nullptr);
 
   _initialized = true;
   _updated = false;
@@ -371,34 +431,9 @@ int RR::GFX::Texture::Update(ID3D12Device* device, ID3D12GraphicsCommandList* co
     return 1;
   }
 
-  D3D12_BOX source_region;
-  source_region.left = 0;
-  source_region.top = 0;
-  source_region.right = _texture_desc->Width;
-  source_region.bottom = _texture_desc->Height;
-  source_region.front = 0;
-  source_region.back = 1;
-
-  D3D12_TEXTURE_COPY_LOCATION default_location = {};
-  default_location.pResource = _default_buffer;
-  default_location.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-  default_location.SubresourceIndex = 0;
-
-  D3D12_TEXTURE_COPY_LOCATION upload_location = {};
-  upload_location.pResource = _upload_buffer;
-  upload_location.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-  device->GetCopyableFootprints(_texture_desc.get(), 0, 1, 0,
-                                &upload_location.PlacedFootprint, nullptr,
-                                nullptr, nullptr);
-
-  UINT8* upload_resource_heap_begin;
-  _upload_buffer->Map( 0, nullptr, reinterpret_cast<void**>(&upload_resource_heap_begin));
-  for (int i = 0; i < upload_location.PlacedFootprint.Footprint.Height; i++) {
-    memcpy(upload_resource_heap_begin + i * upload_location.PlacedFootprint.Footprint.RowPitch,
-           _texture_data.data() + i * _image_byte_row,
-           _image_byte_row);
-  }
-  _upload_buffer->Unmap(0, nullptr);
+  D3D12_PLACED_SUBRESOURCE_FOOTPRINT fps[16] = {0};
+  device->GetCopyableFootprints(_texture_desc.get(), 0, _texture_desc->MipLevels, 0,
+                                fps, nullptr, nullptr, nullptr);
 
   D3D12_RESOURCE_BARRIER vb_upload_resource_heap_barrier = {};
   vb_upload_resource_heap_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -409,15 +444,27 @@ int RR::GFX::Texture::Update(ID3D12Device* device, ID3D12GraphicsCommandList* co
   vb_upload_resource_heap_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
   command_list->ResourceBarrier(1, &vb_upload_resource_heap_barrier);
-  command_list->CopyTextureRegion(&default_location, 0, 0, 0, &upload_location,
-                                  &source_region);
+  
+  for (uint32_t mip = 0; mip < _texture_desc->MipLevels; mip++) {
+    D3D12_TEXTURE_COPY_LOCATION default_location = {};
+    default_location.pResource = _default_buffer;
+    default_location.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    default_location.SubresourceIndex = mip;
+
+    D3D12_TEXTURE_COPY_LOCATION upload_location = {};
+    upload_location.pResource = _upload_buffer;
+    upload_location.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    upload_location.PlacedFootprint = fps[mip];
+
+    command_list->CopyTextureRegion(&default_location, 0, 0, 0,
+                                    &upload_location, nullptr);
+  }
+
   vb_upload_resource_heap_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
   vb_upload_resource_heap_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
   command_list->ResourceBarrier(1, &vb_upload_resource_heap_barrier);
 
   _updated = true;
-
-  _texture_data = std::vector<unsigned char>(0);
 
   return 0;
 }
@@ -428,7 +475,7 @@ void RR::GFX::Texture::CreateResourceView(ID3D12Device* device,
   srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
   srv_desc.Format = _texture_desc->Format;
   srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-  srv_desc.Texture2D.MipLevels = 1;
+  srv_desc.Texture2D.MipLevels = _texture_desc->MipLevels;
   device->CreateShaderResourceView(_default_buffer, &srv_desc, handle);
 }
 
@@ -442,6 +489,4 @@ void RR::GFX::Texture::Release() {
     _upload_buffer->Release();
     _upload_buffer = nullptr;
   }
-
-  _texture_data = std::vector<unsigned char>(0);
 }

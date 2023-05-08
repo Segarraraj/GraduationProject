@@ -6,6 +6,8 @@
 #include <vector>
 #include <memory>
 
+#include "DirectXTex/DirectXTex.h"
+
 struct ID3D12Device;
 struct ID3D12Resource;
 struct ID3D12GraphicsCommandList;
@@ -30,9 +32,6 @@ class Texture : public GraphicResource {
   ID3D12Resource* _upload_buffer = nullptr;
 
   std::unique_ptr<D3D12_RESOURCE_DESC> _texture_desc = nullptr;
-  int _image_byte_row = -1;
-  int _image_size = -1;
-  std::vector<unsigned char> _texture_data;
 };
 }
 }
