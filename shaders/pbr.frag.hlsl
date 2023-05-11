@@ -90,7 +90,7 @@ float3 BRDF(float3 V, float3 L, float3 N, float3 diffuseColor, float3 F0, float 
 
   float3 Fd = diffuseColor * Fd_Lambert();
 
-  return (Fd + Fr) /** NoL*/;
+  return max((Fd + Fr) * NoL, float3(0.0f, 0.0f, 0.0f));
 }
 
 float4 main(VertexOutput input) : SV_TARGET {
@@ -136,7 +136,10 @@ float4 main(VertexOutput input) : SV_TARGET {
   // Light direction
   float3 L = normalize(-1.0f  * float3(1.0f, 1.0f, 0.0f));
 
-  float3 light = BRDF(V, L, N, diffuseColor, f0, roughness);
+  // TODO: Add AO texture, fixed ambient intensity/color
+  float3 ambient = float3(0.02f, 0.02f, 0.02f) * diffuseColor;
+
+  float3 light = ambient + BRDF(V, L, N, diffuseColor, f0, roughness);
 
   // Linear to srgb
   light = pow(light, 1.0 / 2.2);
