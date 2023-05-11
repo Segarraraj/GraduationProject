@@ -72,6 +72,27 @@ float Fd_Burley(float NoV, float NoL, float LoH, float roughness) {
 // Simplified BDRF diffuse
 float Fd_Lambert() { return 1.0 / PI; }
 
+float3 BRDF(float3 V, float3 L, float3 N, float3 diffuseColor, float3 F0, float roughness) {
+  float3 H = normalize(V + L);
+
+  float NoV = abs(dot(N, V)) + 1e-5;
+  float NoL = clamp(dot(N, L), 0.0f, 1.0f);
+  float NoH = clamp(dot(N, H), 0.0f, 1.0f);
+  float LoH = clamp(dot(L, H), 0.0f, 1.0f);
+
+  // PBR
+  float D = D_GGX(NoH, roughness);
+  float3 F = F_Schlick(LoH, F0);
+  float G = V_SmithGGXCorrelated(NoV, NoL, roughness);
+
+  // specular BRDF
+  float3 Fr = (D * G) * F;
+
+  float3 Fd = diffuseColor * Fd_Lambert();
+
+  return (Fd + Fr) /** NoL*/;
+}
+
 float4 main(VertexOutput input) : SV_TARGET {
   // Material parameters remap
   float4 realBaseColor = baseColor;
@@ -112,26 +133,13 @@ float4 main(VertexOutput input) : SV_TARGET {
   // Calculate PBR components
   N = normalize(N);
   float3 V = normalize(cameraPos - input.worldPos.xyz);
-  float3 L = normalize(float3(-1.0f, -1.0f, 0.0f));
-  float3 H = normalize(V + L);
+  // Light direction
+  float3 L = normalize(-1.0f  * float3(1.0f, 1.0f, 0.0f));
 
-  float NoV = abs(dot(N, V)) + 1e-5;
-  float NoL = clamp(dot(N, L), 0.0f, 1.0f);
-  float NoH = clamp(dot(N, H), 0.0f, 1.0f);
-  float LoH = clamp(dot(L, H), 0.0f, 1.0f);
+  float3 light = BRDF(V, L, N, diffuseColor, f0, roughness);
 
-  // PBR
-  float D = D_GGX(NoH, roughness);
-  float3 F = F_Schlick(LoH, f0);
-  float G = V_SmithGGXCorrelated(NoV, NoL, roughness);
+  // Linear to srgb
+  light = pow(light, 1.0 / 2.2);
 
-  // specular BRDF
-  float3 Fr = (D * G) * F;
-  
-  float3 Fd = diffuseColor * Fd_Lambert();
-  //float3 Fd = diffuseColor * Fd_Burley(NoV, NoL, LoH, roughness);
-
-  //return float4(N, 1.0f);
-  //return realBaseColor;
-  return float4((Fd + Fr) * float3(1.0f, 1.0f, 1.0f), realBaseColor.a);
+  return float4(light, realBaseColor.a);
 }
