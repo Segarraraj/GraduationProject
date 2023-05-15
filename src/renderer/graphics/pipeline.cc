@@ -30,7 +30,7 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
     root_signature_feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
   }
 
-  std::vector<D3D12_ROOT_PARAMETER1> parameters = std::vector<D3D12_ROOT_PARAMETER1>(2);
+  std::vector<D3D12_ROOT_PARAMETER1> parameters = std::vector<D3D12_ROOT_PARAMETER1>(3);
   std::vector<D3D12_STATIC_SAMPLER_DESC> samplers = std::vector<D3D12_STATIC_SAMPLER_DESC>(0);
 
   D3D12_ROOT_DESCRIPTOR1 mvp_cb_descriptor = {};
@@ -51,18 +51,19 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
   parameters[1].Descriptor = material_cb_descriptor;
   parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+  D3D12_ROOT_CONSTANTS pipeline_constants = {};
+  pipeline_constants.RegisterSpace = 0;
+  pipeline_constants.ShaderRegister = 2;
+
+  parameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+
   switch (type) {
     case RR::kPipelineType_PBR: {
       parameters.resize(4);
       samplers.resize(1);
 
-      D3D12_ROOT_CONSTANTS pipeline_constants = {};
-      pipeline_constants.RegisterSpace = 0;
-      pipeline_constants.ShaderRegister = 2;
-      pipeline_constants.Num32BitValues = 4;
+      pipeline_constants.Num32BitValues = sizeof(RR::GFX::PBRConstants) / 4;
 
-      parameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-      parameters[2].Constants = pipeline_constants;
       parameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
       D3D12_DESCRIPTOR_RANGE1 table_ranges[1] = {};
@@ -96,7 +97,9 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
       samplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
       break;
     }
-  }  
+  }
+
+  parameters[2].Constants = pipeline_constants;
 
   D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
   root_signature_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -262,6 +265,7 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
   for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) {
     blend_desc.RenderTarget[i] = render_target_blend_desc;
   }
+
   D3D12_DEPTH_STENCILOP_DESC depth_stencil_op = {
       D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP,
       D3D12_COMPARISON_FUNC_ALWAYS};

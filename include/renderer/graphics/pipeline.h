@@ -11,6 +11,19 @@ struct ID3D12Device;
 
 namespace RR {
 namespace GFX {
+struct PBRConstants {
+  float elapsed_time;
+  float ambient_intensity;
+  float pad0[2];
+  float camera_position[3];
+  float pad1;
+  float directional_light_position[3];
+};
+
+union PipelineProperties {
+  PBRConstants pbr_constants;
+};
+
 class Pipeline : public GraphicResource {
  public:
   Pipeline() = default;
@@ -23,6 +36,7 @@ class Pipeline : public GraphicResource {
   ID3D12RootSignature* RootSignature();
   uint32_t GeometryType(); 
   uint32_t Type();
+  PipelineProperties properties;
 
  private:
   uint32_t _type = 0U;

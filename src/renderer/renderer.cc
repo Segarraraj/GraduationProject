@@ -1135,14 +1135,25 @@ void RR::Renderer::UpdatePipeline() {
   // CHANGE PipelineTypes values to change sorting and render order
   for (std::map<uint32_t, std::list<std::shared_ptr<RendererComponent>>>::iterator i = render_list.begin();
        i != render_list.end(); i++) {
-    GFX::Pipeline pipeline = _pipelines[i->first];
+    GFX::Pipeline& pipeline = _pipelines[i->first];
     _command_list->SetPipelineState(pipeline.PipelineState());
     _command_list->SetGraphicsRootSignature(pipeline.RootSignature());
 
     switch (pipeline.Type()) {
       case RR::PipelineTypes::kPipelineType_PBR: {
-        _command_list->SetGraphicsRoot32BitConstants(2, 1, &elapsed_time, 0);
-        _command_list->SetGraphicsRoot32BitConstants(2, 3, &camera_world->world._41, 1);
+        pipeline.properties.pbr_constants.elapsed_time = elapsed_time;
+
+        pipeline.properties.pbr_constants.camera_position[0] = camera_world->world._41;
+        pipeline.properties.pbr_constants.camera_position[1] = camera_world->world._42;
+        pipeline.properties.pbr_constants.camera_position[2] = camera_world->world._43;
+        
+        // TODO: EDITOR
+        pipeline.properties.pbr_constants.ambient_intensity = 0.02f;
+        pipeline.properties.pbr_constants.directional_light_position[0] = 1.0f;
+        pipeline.properties.pbr_constants.directional_light_position[1] = 1.0f;
+        pipeline.properties.pbr_constants.directional_light_position[2] = 0.0f;
+
+        _command_list->SetGraphicsRoot32BitConstants(2, sizeof(RR::GFX::PBRConstants) / 4, &pipeline.properties.pbr_constants, 0);
         break;
       }          
     }

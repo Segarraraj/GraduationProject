@@ -24,8 +24,10 @@ cbuffer MaterialParameters : register(b1) {
 };
 
 cbuffer Constants : register(b2) {
-  float time;
+  float elapsedTime;
+  float ambientIntensity;
   float3 cameraPos;
+  float3 lightPos;
 };
 
 struct VertexOutput {
@@ -136,10 +138,10 @@ float4 main(VertexOutput input) : SV_TARGET {
   N = normalize(N);
   float3 V = normalize(cameraPos - input.worldPos.xyz);
   // Light direction
-  float3 L = normalize(-1.0f  * float3(1.0f, 1.0f, 0.0f));
+  float3 L = normalize(-1.0f * lightPos);
 
   // TODO: Add AO texture, fixed ambient intensity/color
-  float3 ambient = float3(0.02f, 0.02f, 0.02f) * diffuseColor;
+  float3 ambient = ambientIntensity * diffuseColor;
 
   float3 light = ambient + BRDF(V, L, N, diffuseColor, f0, roughness);
 
