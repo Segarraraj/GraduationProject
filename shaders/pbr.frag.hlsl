@@ -98,21 +98,23 @@ float4 main(VertexOutput input) : SV_TARGET {
   float4 realBaseColor = baseColor;
   if (baseColorTexture) {
     realBaseColor = textures[0].Sample(s1, input.uv);
+    float3 correct = pow(realBaseColor.rgb, 2.2f);
+    realBaseColor = float4(correct.rgb, realBaseColor.a);
   }
 
   float realMetallic = metallic;
   if (metallicTexture) {
-    realMetallic = textures[1].Sample(s1, input.uv).r;
+    realMetallic = pow(textures[1].Sample(s1, input.uv), 2.2f).r;
   }
 
   float realperceptualRoughness = perceptualRoughness;
   if (roughnessTexture) {
-    realperceptualRoughness = textures[3].Sample(s1, input.uv).r;
+    realperceptualRoughness = pow(textures[3].Sample(s1, input.uv), 2.2f).r;
   }
 
   float realReflectance = reflectance;
   if (reflectanceTexture) {
-    realReflectance = textures[4].Sample(s1, input.uv).r;
+    realReflectance = pow(textures[4].Sample(s1, input.uv), 2.2f).r;
   }
 
   float3 N;
