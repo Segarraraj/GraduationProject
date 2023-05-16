@@ -296,6 +296,16 @@ int RR::GFX::Pipeline::Init(ID3D12Device* device, uint32_t type,
     return 1;
   }
 
+  // default PROPERTIES
+  switch (type) {
+    case RR::kPipelineType_PBR:
+      properties.pbr_constants.ambient_intensity = 0.02f;
+      properties.pbr_constants.directional_light_position[0] = 1.0f;
+      properties.pbr_constants.directional_light_position[1] = 1.0f;
+      properties.pbr_constants.directional_light_position[2] = 0.0f;
+      break;
+  }
+
   _initialized = true;
   _type = type;
   _geometry_type = geometry_type;
