@@ -34,6 +34,7 @@ class Entity;
 class Camera;
 class Input;
 struct GeometryData;
+class Editor;
 namespace GFX {
 class Texture;
 class Pipeline;
@@ -80,9 +81,10 @@ class Renderer {
  private:
   static const uint16_t kSwapchainBufferCount = 3;
 
-  std::unique_ptr<RR::Window> _window;
-  std::shared_ptr<Entity> _main_camera;
-  std::unique_ptr<RR::Input> _input;
+  std::unique_ptr<RR::Window> _window = nullptr;
+  std::unique_ptr<RR::Editor> _editor = nullptr;
+  std::shared_ptr<Entity> _main_camera = nullptr;
+  std::unique_ptr<RR::Input> _input = nullptr;
 
   std::vector<GFX::Geometry> _geometries;
   std::vector<GFX::Texture> _textures;
@@ -121,7 +123,6 @@ class Renderer {
   void UpdateGraphicResources();
   void InternalUpdate();
   void UpdatePipeline();
-  void ShowEditor();
   void Render();
   void Cleanup();
   void WaitForPreviousFrame();

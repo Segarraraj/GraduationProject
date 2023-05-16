@@ -23,6 +23,7 @@
 #include "renderer/window.h"
 #include "renderer/logger.h"
 #include "renderer/entity.h"
+#include "renderer/editor.h"
 #include "renderer/input.h"
 #include "renderer/graphics/texture.h"
 #include "renderer/graphics/pipeline.h"
@@ -110,6 +111,7 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   // Initialize window
   _window = std::make_unique<RR::Window>();
   _input = std::make_unique<RR::Input>();
+  _editor = std::make_unique<RR::Editor>();
 
   _window->Init(GetModuleHandle(NULL), "winclass", "DX12 Graduation Project",
                 WindowProc, this);
@@ -467,7 +469,7 @@ void RR::Renderer::Start() {
     MTR_END("Renderer", "Internal update");
 
     MTR_BEGIN("Renderer", "Show editor");
-    ShowEditor();
+    _editor->ShowEditor(&_entities, &_pipelines, &_geometries, &_textures);
     MTR_END("Renderer", "Show editor");
 
     ImGui::Render();
@@ -1146,12 +1148,6 @@ void RR::Renderer::UpdatePipeline() {
         pipeline.properties.pbr_constants.camera_position[0] = camera_world->world._41;
         pipeline.properties.pbr_constants.camera_position[1] = camera_world->world._42;
         pipeline.properties.pbr_constants.camera_position[2] = camera_world->world._43;
-        
-        // TODO: EDITOR
-        pipeline.properties.pbr_constants.ambient_intensity = 0.02f;
-        pipeline.properties.pbr_constants.directional_light_position[0] = 1.0f;
-        pipeline.properties.pbr_constants.directional_light_position[1] = 1.0f;
-        pipeline.properties.pbr_constants.directional_light_position[2] = 0.0f;
 
         _command_list->SetGraphicsRoot32BitConstants(2, sizeof(RR::GFX::PBRConstants) / 4, &pipeline.properties.pbr_constants, 0);
         break;
@@ -1213,10 +1209,6 @@ void RR::Renderer::UpdatePipeline() {
     LOG_ERROR("RR", "Couldn't close command list");
     _running = false;
   }
-}
-
-void RR::Renderer::ShowEditor() {
-  ImGui::ShowDemoWindow();
 }
 
 void RR::Renderer::Render() {
