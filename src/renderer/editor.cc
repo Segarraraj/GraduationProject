@@ -47,60 +47,56 @@ void RR::Editor::ShowEditor(
   const std::vector<RR::GFX::Geometry>* geometries,
   const std::vector<RR::GFX::Texture>* textures) {
 
+  bool editor = true;
 
-  if (ImGui::Begin("Hierarchy", &_show_hierarchy_window)) {
-    std::map<std::shared_ptr<RR::Entity>, std::shared_ptr<RR::Entity>>
-        parent_child;
-    for (std::list<std::shared_ptr<RR::Entity>>::iterator i = entities->begin();
-      i != entities->end(); i++) {
-      
-      std::shared_ptr<RR::LocalTransform> lt = 
-        std::static_pointer_cast<RR::LocalTransform>(
-          i->get()->GetComponent(RR::ComponentTypes::kComponentType_LocalTransform));
-
-      if (lt != nullptr && lt->parent != nullptr) {
-        parent_child[lt->parent] = *i;
-      }
-    }
-
-    ImGuiTreeNodeFlags base_flags =
-        ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick |
-        ImGuiTreeNodeFlags_SpanAvailWidth;
-    std::shared_ptr<RR::Entity> node_clicked = nullptr;
-
-    int id = 0;
-    for (std::list<std::shared_ptr<RR::Entity>>::iterator i = entities->begin();
-         i != entities->end(); i++) {
-      AddHierarchyTreeNode(parent_child, *i, _selected_entity, base_flags, &node_clicked, &id);
-    }
-
-    if (node_clicked != nullptr) {
-      _selected_entity = node_clicked;
-    }
-
-    ImGui::End();
-  }
-
-  if (ImGui::Begin("Details", &_show_details_window)) {
-  
-    ImGui::End();
-  }
-
-  if (ImGui::Begin("Renderer properties", &_show_properties_window)) {
-    RR::GFX::Pipeline& pbr_pipeline =
-        (*pipelines)[RR::PipelineTypes::kPipelineType_PBR];
-    ImGui::SeparatorText("PBR Rendering properties");
+  ImGui::Begin("Hierarchy", &editor);
+  std::map<std::shared_ptr<RR::Entity>, std::shared_ptr<RR::Entity>>
+      parent_child;
+  for (std::list<std::shared_ptr<RR::Entity>>::iterator i = entities->begin();
+    i != entities->end(); i++) {
     
-    ImGui::DragFloat("Ambient Light Intensity",
-                     &pbr_pipeline.properties.pbr_constants.ambient_intensity,
-                     0.001f, 0.0f, 1.0f);
-
-    ImGui::DragFloat3("Directional Light 'Position'",
-                     pbr_pipeline.properties.pbr_constants.directional_light_position,
-                     0.01f);
-
-    ImGui::End();
+    std::shared_ptr<RR::LocalTransform> lt = 
+      std::static_pointer_cast<RR::LocalTransform>(
+        i->get()->GetComponent(RR::ComponentTypes::kComponentType_LocalTransform));
+  
+    if (lt != nullptr && lt->parent != nullptr) {
+      parent_child[lt->parent] = *i;
+    }
   }
+  
+  ImGuiTreeNodeFlags base_flags =
+      ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick |
+      ImGuiTreeNodeFlags_SpanAvailWidth;
+  std::shared_ptr<RR::Entity> node_clicked = nullptr;
+  
+  int id = 0;
+  for (std::list<std::shared_ptr<RR::Entity>>::iterator i = entities->begin();
+       i != entities->end(); i++) {
+    AddHierarchyTreeNode(parent_child, *i, _selected_entity, base_flags, &node_clicked, &id);
+  }
+  
+  if (node_clicked != nullptr) {
+    _selected_entity = node_clicked;
+  }
+  
+  ImGui::End();
+
+  ImGui::Begin("Details", &editor);
+  ImGui::End();
+
+  ImGui::Begin("Renderer properties", NULL);
+  RR::GFX::Pipeline& pbr_pipeline = (*pipelines)[RR::PipelineTypes::kPipelineType_PBR];
+  ImGui::SeparatorText("PBR Rendering properties");  
+  ImGui::DragFloat("Ambient Light Intensity",
+                   &pbr_pipeline.properties.pbr_constants.ambient_intensity,
+                   0.001f, 0.0f, 1.0f);
+
+  ImGui::DragFloat3("Directional Light 'Position'",
+                   pbr_pipeline.properties.pbr_constants.directional_light_position,
+                   0.01f);
+
+  ImGui::End();
+  
 
   ImGui::ShowDemoWindow();
 }
