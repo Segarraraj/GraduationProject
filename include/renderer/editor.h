@@ -31,6 +31,8 @@ class Editor {
                   const std::vector<GFX::Texture>* textures);
 
  private:
+  std::shared_ptr<RR::Entity> _selected_entity = nullptr;
+
   bool _show_hierarchy_window = true;
   bool _show_details_window = true;
   bool _show_properties_window = true;
