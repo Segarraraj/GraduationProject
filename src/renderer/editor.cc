@@ -87,6 +87,21 @@ void RR::Editor::ShowEditor(
   if (_selected_entity != nullptr) {
     for (uint32_t i = 0; i < RR::ComponentTypes::kComponentTYpe_Count; i++) {
       switch (i) {
+        case RR::ComponentTypes::kComponentType_LocalTransform: {
+          std::shared_ptr<RR::LocalTransform> lt =
+              std::static_pointer_cast<RR::LocalTransform>(
+                  _selected_entity->GetComponent(i));
+
+          if (lt == nullptr) {
+            break;
+          }
+
+          ImGui::SeparatorText("Local Transform");
+          ImGui::DragFloat3("Position", &lt->position.x, .01f);
+          ImGui::DragFloat3("Rotation", &lt->rotation.x, .01f);
+          ImGui::DragFloat3("Scale", &lt->scale.x, .01f);
+          break;
+        }
         case RR::ComponentTypes::kComponentType_Camera: {
           std::shared_ptr<RR::Camera> camera =
               std::static_pointer_cast<RR::Camera>(
