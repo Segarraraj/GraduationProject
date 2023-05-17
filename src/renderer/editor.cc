@@ -8,6 +8,7 @@
 #include "renderer/graphics/pipeline.h"
 #include "renderer/graphics/texture.h"
 
+#include "renderer/components/camera_component.h"
 #include "renderer/components/local_transform_component.h"
 
 static void AddHierarchyTreeNode(
@@ -82,6 +83,32 @@ void RR::Editor::ShowEditor(
   ImGui::End();
 
   ImGui::Begin("Details", &editor);
+
+  if (_selected_entity != nullptr) {
+    for (uint32_t i = 0; i < RR::ComponentTypes::kComponentTYpe_Count; i++) {
+      switch (i) {
+        case RR::ComponentTypes::kComponentType_Camera: {
+          std::shared_ptr<RR::Camera> camera =
+              std::static_pointer_cast<RR::Camera>(
+                  _selected_entity->GetComponent(i));
+
+          if (camera == nullptr) {
+            break;
+          }
+
+          ImGui::SeparatorText("Camera Component");
+          ImGui::DragFloat("Fov", &camera->fov, .1f, 25.0f, 100.0f);
+          ImGui::DragFloat("NearZ", &camera->nearZ, .001f, 0.0001f, 1.0f);
+          ImGui::DragFloat("FarZ", &camera->farZ, .1f, 0.0f, 9999.0f);
+          ImGui::ColorEdit3("Clear Color", camera->clear_color);
+          break;
+        }
+      }
+    }
+  }
+
+
+
   ImGui::End();
 
   ImGui::Begin("Renderer properties", NULL);

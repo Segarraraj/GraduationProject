@@ -7,11 +7,12 @@
 
 namespace RR {
 enum ComponentTypes : uint32_t {
-  kComponentType_None           = 0b0000,
-  kComponentType_WorldTransform = 0b0001,
-  kComponentType_LocalTransform = 0b0010,
-  kComponentType_Renderer       = 0b0100,
-  kComponentType_Camera         = 0b1000
+  kComponentType_None           = 0b00000,
+  kComponentType_LocalTransform = 0b00001,
+  kComponentType_WorldTransform = 0b00010,
+  kComponentType_Renderer       = 0b00100,
+  kComponentType_Camera         = 0b01000,
+  kComponentTYpe_Count          = 0b10000
 };
 
 enum GeometryTypes : uint32_t { 
