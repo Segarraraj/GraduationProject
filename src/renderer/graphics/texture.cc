@@ -163,10 +163,10 @@ static int GetDXGIFormatBitsPerPixel(DXGI_FORMAT& dxgiFormat) {
     return 8;
 }
 
-static int LoadImageDataFromFile(DirectX::Image* image,
+static int LoadImageDataFromFile(std::vector<unsigned char>* image_data,
                                  D3D12_RESOURCE_DESC* resource_description,
-                                 const wchar_t* filename) {
-  if (image == nullptr || resource_description == nullptr ||  filename == nullptr) {
+                                 const wchar_t* filename, int* image_byte_row) {
+  if (image_data == nullptr || resource_description == nullptr ||  filename == nullptr) {
     return -1;
   }
 
@@ -256,19 +256,20 @@ static int LoadImageDataFromFile(DirectX::Image* image,
   }
 
   int bits_per_pixel = GetDXGIFormatBitsPerPixel(dxgi_format);  // number of bits per pixel
-  int bytes_per_row = (width * bits_per_pixel) / 8;  
-  int image_size = bytes_per_row * height;
+  *image_byte_row = (width * bits_per_pixel) / 8;  
+  int image_size = *image_byte_row * height;
+
+  image_data->resize(image_size);
   
-  // Fixme: hehe
-  image->pixels = (uint8_t*)malloc(image_size);
- 
   if (converted) {
-    result = converter->CopyPixels(0, bytes_per_row, image_size, image->pixels);
+    result = converter->CopyPixels(0, *image_byte_row, image_size,
+                                   image_data->data());
     if (FAILED(result)) {
       return -1;
     }
   } else {
-    result = frame->CopyPixels(0, bytes_per_row, image_size, image->pixels);
+    result =
+        frame->CopyPixels(0, *image_byte_row, image_size, image_data->data());
     if (FAILED(result)) {
       return -1;
     }
@@ -287,12 +288,6 @@ static int LoadImageDataFromFile(DirectX::Image* image,
   resource_description->Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
   resource_description->Flags = D3D12_RESOURCE_FLAG_NONE;
 
-  image->format = dxgi_format;
-  image->width = width;
-  image->height = height;
-  image->rowPitch = bytes_per_row;
-  image->slicePitch = 0;
-
   return image_size;
 }
 
@@ -302,14 +297,16 @@ int RR::GFX::Texture::Init(ID3D12Device* device, const wchar_t* file_name) {
   }
 
   _texture_desc = std::make_unique<D3D12_RESOURCE_DESC>();
-  std::vector<DirectX::Image> images = std::vector<DirectX::Image>(1);
+  std::vector<DirectX::Image> images = std::vector<DirectX::Image>(0);
+  std::vector<unsigned char> data = std::vector<unsigned char>(0);
+  int image_byte_row = 0;
   DirectX::TexMetadata info;
   std::unique_ptr<DirectX::ScratchImage> image = std::make_unique<DirectX::ScratchImage>();
 
   HRESULT hr = {};  
 
   if (wcsstr(file_name, L".dds") == nullptr) {
-    int result = LoadImageDataFromFile(images.data(), _texture_desc.get(), file_name);
+    int result = LoadImageDataFromFile(&data, _texture_desc.get(), file_name, &image_byte_row);
     if (result == -1) {
       return -1;
     }
@@ -371,12 +368,10 @@ int RR::GFX::Texture::Init(ID3D12Device* device, const wchar_t* file_name) {
   }
 
   UINT64 upload_buffer_size;
-  std::vector<UINT> num_rows = std::vector<UINT>(_texture_desc->MipLevels);
-  std::vector<UINT64> row_bytes = std::vector<UINT64>(_texture_desc->MipLevels);
   D3D12_PLACED_SUBRESOURCE_FOOTPRINT fps[16] = {0};
   device->GetCopyableFootprints(_texture_desc.get(), 0, 
                                 _texture_desc->MipLevels, 0, 
-                                fps, num_rows.data(), row_bytes.data(), 
+                                fps, nullptr, nullptr, 
                                 &upload_buffer_size);
 
   D3D12_RESOURCE_DESC upload_heap_desc = {};
@@ -403,12 +398,17 @@ int RR::GFX::Texture::Init(ID3D12Device* device, const wchar_t* file_name) {
   UINT8* upload_resource_heap_begin;
   _upload_buffer->Map(0, nullptr, reinterpret_cast<void**>(&upload_resource_heap_begin));
 
-  for (uint32_t mip = 0; mip < _texture_desc->MipLevels; mip++) {
-    memcpy(
-      upload_resource_heap_begin + fps[mip].Offset, 
-      images[mip].pixels,
-      images[mip].slicePitch
-    );
+  if (data.size() != 0) {
+    for (int i = 0; i < fps[0].Footprint.Height; i++) {
+      memcpy(upload_resource_heap_begin + i * fps[0].Footprint.RowPitch,
+             data.data() + i * image_byte_row, image_byte_row);
+    }
+    
+  } else {
+    for (uint32_t mip = 0; mip < _texture_desc->MipLevels; mip++) {
+      memcpy(upload_resource_heap_begin + fps[mip].Offset, images[mip].pixels,
+             images[mip].slicePitch);
+    }
   }
 
   _upload_buffer->Unmap(0, nullptr);
