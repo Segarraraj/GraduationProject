@@ -24,7 +24,8 @@ class Editor {
   Editor() = default;
   ~Editor() = default;
 
-  void Init() { };
+  void Init() {};
+
   void ShowEditor(std::list<std::shared_ptr<RR::Entity>>* entities,
                   std::map<uint32_t, GFX::Pipeline>* pipelines,
                   const std::vector<GFX::Geometry>* geometries,

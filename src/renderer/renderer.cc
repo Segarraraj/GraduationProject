@@ -116,7 +116,7 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   _window->Init(GetModuleHandle(NULL), "winclass", "DX12 Graduation Project",
                 WindowProc, this);
 
-  _window->Show(); 
+  _window->Show();
 
   _main_camera = RegisterEntity(ComponentTypes::kComponentType_LocalTransform |
                                 ComponentTypes::kComponentType_WorldTransform |
@@ -397,6 +397,11 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   _pipelines[RR::PipelineTypes::kPipelineType_Phong] = RR::GFX::Pipeline();
   _pipelines[RR::PipelineTypes::kPipelineType_Phong].Init(
       _device, kPipelineType_Phong, kGeometryType_Positions_Normals_UV);
+
+
+  LOG_DEBUG("RR", "Initializating editor");
+  _editor->Init();
+
 
   LOG_DEBUG("RR", "Loading default assets");
   LoadTexture(L"../../resources/Textures/default.jpg");

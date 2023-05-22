@@ -79,9 +79,7 @@ void RR::Editor::ShowEditor(
   std::shared_ptr<RR::Entity> node_clicked = nullptr;
   
   int id = 0;
-  for (std::map<std::shared_ptr<RR::Entity>,
-                std::list<std::shared_ptr<RR::Entity>>>::iterator i =
-           parent_child.begin();
+  for (std::map<std::shared_ptr<RR::Entity>, std::list<std::shared_ptr<RR::Entity>>>::iterator i = parent_child.begin();
        i != parent_child.end(); i++) {
     AddHierarchyTreeNode(parent_child, i->first, _selected_entity, base_flags, &node_clicked, &id);
   }
@@ -110,6 +108,32 @@ void RR::Editor::ShowEditor(
           ImGui::DragFloat3("Position", &lt->position.x, .01f);
           ImGui::DragFloat3("Rotation", &lt->rotation.x, .01f);
           ImGui::DragFloat3("Scale", &lt->scale.x, .01f);
+          break;
+        }
+        case RR::ComponentTypes::kComponentType_Renderer: {
+          std::shared_ptr<RR::RendererComponent> rc =
+              std::static_pointer_cast<RR::RendererComponent>(
+                  _selected_entity->GetComponent(i));
+
+          if (rc == nullptr) {
+            break;
+          }
+
+          ImGui::SeparatorText("Renderer Component");
+          switch (rc->_pipeline_type) { 
+            case RR::PipelineTypes::kPipelineType_PBR: {
+              ImGui::Text("Pipeline: PBR");
+              for (size_t i = 0; i < rc->settings.size(); i++) {
+                ImGui::Text("Material Slot: %d", i);
+                ImGui::DragFloat("Metallic", &rc->settings[i].pbr_settings.metallic, .01f, .0f, 1.0f);
+                ImGui::DragFloat("Roughness", &rc->settings[i].pbr_settings.roughness, .01f, .0f, 1.0f);
+                ImGui::DragFloat("Reflectance", &rc->settings[i].pbr_settings.reflectance, .01f, .0f, 1.0f);
+                ImGui::ColorEdit4("Base color", rc->settings[i].pbr_settings.base_color);
+                ImGui::Spacing();                
+              }
+              break;
+            }
+          }
           break;
         }
         case RR::ComponentTypes::kComponentType_Camera: {
@@ -146,7 +170,4 @@ void RR::Editor::ShowEditor(
                    0.01f);
 
   ImGui::End();
-  
-
-  ImGui::ShowDemoWindow();
 }

@@ -9,6 +9,7 @@
 struct ID3D12Resource;
 struct ID3D12DescriptorHeap;
 struct ID3D12Device;
+struct D3D12_GPU_DESCRIPTOR_HANDLE;
 
 namespace RR {
 namespace GFX {
@@ -46,9 +47,10 @@ class RendererComponent : public EntityComponent {
 
   uint64_t MVPConstantBufferView(); 
   uint64_t MaterialConstantBufferView();
-  ID3D12DescriptorHeap* SRVDescriptorHeap(uint32_t geometry);
+  ID3D12DescriptorHeap* SRVDescriptorHeap(uint32_t index);
 
   friend class Renderer;
+  friend class Editor;
 };
 }
 
