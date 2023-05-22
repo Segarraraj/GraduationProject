@@ -9,10 +9,11 @@
 #include "renderer/graphics/texture.h"
 
 #include "renderer/components/camera_component.h"
+#include "renderer/components/renderer_component.h"
 #include "renderer/components/local_transform_component.h"
 
 static void AddHierarchyTreeNode(
-    std::map<std::shared_ptr<RR::Entity>, std::shared_ptr<RR::Entity>>& parent_child, 
+    std::map<std::shared_ptr<RR::Entity>, std::list<std::shared_ptr<RR::Entity>>>& parent_child, 
     std::shared_ptr<RR::Entity> entity, std::shared_ptr<RR::Entity> selected_entity,
     ImGuiTreeNodeFlags base_flags, std::shared_ptr<RR::Entity>* node_clicked, int* id) {
 
@@ -22,7 +23,11 @@ static void AddHierarchyTreeNode(
     node_flags |= ImGuiTreeNodeFlags_Selected;
   }
 
-  if (parent_child.count(entity) == 0) {
+  if (parent_child.count(entity) != 0) {
+    if (parent_child[entity].size() == 0) {
+      node_flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    }
+  } else {
     node_flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
   }
 
@@ -34,9 +39,11 @@ static void AddHierarchyTreeNode(
   }
 
   if (node_open && ((node_flags & ImGuiTreeNodeFlags_Leaf) == 0)) {
-    if (parent_child.count(entity) != 0) {
-      AddHierarchyTreeNode(parent_child, parent_child[entity], selected_entity,
-                           base_flags, node_clicked, id);
+    if (parent_child[entity].size() != 0) {
+      for (std::list<std::shared_ptr<RR::Entity>>::iterator i = parent_child[entity].begin();
+           i != parent_child[entity].end(); i++) {
+        AddHierarchyTreeNode(parent_child, *i, selected_entity, base_flags, node_clicked, id);
+      }      
     }
     ImGui::TreePop();
   }
@@ -51,8 +58,7 @@ void RR::Editor::ShowEditor(
   bool editor = true;
 
   ImGui::Begin("Hierarchy", &editor);
-  std::map<std::shared_ptr<RR::Entity>, std::shared_ptr<RR::Entity>>
-      parent_child;
+  std::map<std::shared_ptr<RR::Entity>, std::list<std::shared_ptr<RR::Entity>>> parent_child;
   for (std::list<std::shared_ptr<RR::Entity>>::iterator i = entities->begin();
     i != entities->end(); i++) {
     
@@ -61,7 +67,9 @@ void RR::Editor::ShowEditor(
         i->get()->GetComponent(RR::ComponentTypes::kComponentType_LocalTransform));
   
     if (lt != nullptr && lt->parent != nullptr) {
-      parent_child[lt->parent] = *i;
+      parent_child[lt->parent].push_back(*i);
+    } else {
+      parent_child[*i] = std::list<std::shared_ptr<RR::Entity>>(0);
     }
   }
   
@@ -71,9 +79,11 @@ void RR::Editor::ShowEditor(
   std::shared_ptr<RR::Entity> node_clicked = nullptr;
   
   int id = 0;
-  for (std::list<std::shared_ptr<RR::Entity>>::iterator i = entities->begin();
-       i != entities->end(); i++) {
-    AddHierarchyTreeNode(parent_child, *i, _selected_entity, base_flags, &node_clicked, &id);
+  for (std::map<std::shared_ptr<RR::Entity>,
+                std::list<std::shared_ptr<RR::Entity>>>::iterator i =
+           parent_child.begin();
+       i != parent_child.end(); i++) {
+    AddHierarchyTreeNode(parent_child, i->first, _selected_entity, base_flags, &node_clicked, &id);
   }
   
   if (node_clicked != nullptr) {
@@ -121,8 +131,6 @@ void RR::Editor::ShowEditor(
       }
     }
   }
-
-
 
   ImGui::End();
 
