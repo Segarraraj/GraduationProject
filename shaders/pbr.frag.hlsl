@@ -24,8 +24,10 @@ cbuffer MaterialParameters : register(b1) {
 };
 
 cbuffer Constants : register(b2) {
-  float time;
+  float elapsedTime;
+  float ambientIntensity;
   float3 cameraPos;
+  float3 lightPos;
 };
 
 struct VertexOutput {
@@ -72,26 +74,49 @@ float Fd_Burley(float NoV, float NoL, float LoH, float roughness) {
 // Simplified BDRF diffuse
 float Fd_Lambert() { return 1.0 / PI; }
 
+float3 BRDF(float3 V, float3 L, float3 N, float3 diffuseColor, float3 F0, float roughness) {
+  float3 H = normalize(V + L);
+
+  float NoV = abs(dot(N, V)) + 1e-5;
+  float NoL = clamp(dot(N, L), 0.0f, 1.0f);
+  float NoH = clamp(dot(N, H), 0.0f, 1.0f);
+  float LoH = clamp(dot(L, H), 0.0f, 1.0f);
+
+  // PBR
+  float D = D_GGX(NoH, roughness);
+  float3 F = F_Schlick(LoH, F0);
+  float G = V_SmithGGXCorrelated(NoV, NoL, roughness);
+
+  // specular BRDF
+  float3 Fr = (D * G) * F;
+
+  float3 Fd = diffuseColor * Fd_Lambert();
+
+  return max((Fd + Fr) * NoL, float3(0.0f, 0.0f, 0.0f));
+}
+
 float4 main(VertexOutput input) : SV_TARGET {
   // Material parameters remap
   float4 realBaseColor = baseColor;
   if (baseColorTexture) {
     realBaseColor = textures[0].Sample(s1, input.uv);
+    float3 correct = pow(realBaseColor.rgb, 2.2f);
+    realBaseColor = float4(correct.rgb, realBaseColor.a);
   }
 
   float realMetallic = metallic;
   if (metallicTexture) {
-    realMetallic = textures[1].Sample(s1, input.uv).r;
+    realMetallic = pow(textures[1].Sample(s1, input.uv), 2.2f).r;
   }
 
   float realperceptualRoughness = perceptualRoughness;
   if (roughnessTexture) {
-    realperceptualRoughness = textures[3].Sample(s1, input.uv).r;
+    realperceptualRoughness = pow(textures[3].Sample(s1, input.uv), 2.2f).r;
   }
 
   float realReflectance = reflectance;
   if (reflectanceTexture) {
-    realReflectance = textures[4].Sample(s1, input.uv).r;
+    realReflectance = pow(textures[4].Sample(s1, input.uv), 2.2f).r;
   }
 
   float3 N;
@@ -103,6 +128,7 @@ float4 main(VertexOutput input) : SV_TARGET {
     N = input.worldNormal;
   }
 
+  float3 diffuseColor = (1.0f - realMetallic) * realBaseColor.rgb;
   float3 f0 =
       0.16f * realReflectance * realReflectance * (1.0f - realMetallic) +
       realBaseColor.rgb * realMetallic;
@@ -111,28 +137,16 @@ float4 main(VertexOutput input) : SV_TARGET {
   // Calculate PBR components
   N = normalize(N);
   float3 V = normalize(cameraPos - input.worldPos.xyz);
-  float3 L = normalize(float3(0.0f, 1.0f, 0.0f));
-  float3 H = normalize(V + L);
+  // Light direction
+  float3 L = normalize(-1.0f * lightPos);
 
-  float NoV = abs(dot(N, V)) + 1e-5;
-  float NoL = clamp(dot(N, L), 0.0f, 1.0f);
-  float NoH = clamp(dot(N, H), 0.0f, 1.0f);
-  float LoH = clamp(dot(L, H), 0.0f, 1.0f);
+  // TODO: Add AO texture, fixed ambient intensity/color
+  float3 ambient = ambientIntensity * diffuseColor;
 
-  // PBR
-  float D = D_GGX(NoH, roughness);
-  float3 F = F_Schlick(LoH, f0);
-  float G = V_SmithGGXCorrelated(NoV, NoL, roughness);
+  float3 light = ambient + BRDF(V, L, N, diffuseColor, f0, roughness);
 
-  float3 diffuseColor = realBaseColor.rgb * (1.0f - F);
-  diffuseColor *= 1.0f - realMetallic;
+  // Linear to srgb
+  light = pow(light, 1.0 / 2.2);
 
-  // specular BRDF
-  float3 Fr = (D * G) * F;
-  
-  float3 color = diffuseColor * Fd_Lambert() + Fr;
-  //float3 Fd = diffuseColor * Fd_Burley(NoV, NoL, LoH, roughness);
-
-  //return float4(N, 1.0f);
-  return float4(color, realBaseColor.a);
+  return float4(light, realBaseColor.a);
 }

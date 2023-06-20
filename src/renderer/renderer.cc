@@ -23,6 +23,7 @@
 #include "renderer/window.h"
 #include "renderer/logger.h"
 #include "renderer/entity.h"
+#include "renderer/editor.h"
 #include "renderer/input.h"
 #include "renderer/graphics/texture.h"
 #include "renderer/graphics/pipeline.h"
@@ -110,11 +111,12 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   // Initialize window
   _window = std::make_unique<RR::Window>();
   _input = std::make_unique<RR::Input>();
+  _editor = std::make_unique<RR::Editor>();
 
   _window->Init(GetModuleHandle(NULL), "winclass", "DX12 Graduation Project",
                 WindowProc, this);
 
-  _window->Show(); 
+  _window->Show();
 
   _main_camera = RegisterEntity(ComponentTypes::kComponentType_LocalTransform |
                                 ComponentTypes::kComponentType_WorldTransform |
@@ -396,6 +398,11 @@ int RR::Renderer::Init(void* user_data, void (*update)(void*)) {
   _pipelines[RR::PipelineTypes::kPipelineType_Phong].Init(
       _device, kPipelineType_Phong, kGeometryType_Positions_Normals_UV);
 
+
+  LOG_DEBUG("RR", "Initializating editor");
+  _editor->Init();
+
+
   LOG_DEBUG("RR", "Loading default assets");
   LoadTexture(L"../../resources/Textures/default.jpg");
 
@@ -467,7 +474,7 @@ void RR::Renderer::Start() {
     MTR_END("Renderer", "Internal update");
 
     MTR_BEGIN("Renderer", "Show editor");
-    ShowEditor();
+    _editor->ShowEditor(&_entities, &_pipelines, &_geometries, &_textures);
     MTR_END("Renderer", "Show editor");
 
     ImGui::Render();
@@ -1135,14 +1142,19 @@ void RR::Renderer::UpdatePipeline() {
   // CHANGE PipelineTypes values to change sorting and render order
   for (std::map<uint32_t, std::list<std::shared_ptr<RendererComponent>>>::iterator i = render_list.begin();
        i != render_list.end(); i++) {
-    GFX::Pipeline pipeline = _pipelines[i->first];
+    GFX::Pipeline& pipeline = _pipelines[i->first];
     _command_list->SetPipelineState(pipeline.PipelineState());
     _command_list->SetGraphicsRootSignature(pipeline.RootSignature());
 
     switch (pipeline.Type()) {
       case RR::PipelineTypes::kPipelineType_PBR: {
-        _command_list->SetGraphicsRoot32BitConstants(2, 1, &elapsed_time, 0);
-        _command_list->SetGraphicsRoot32BitConstants(2, 3, &camera_world->world._41, 1);
+        pipeline.properties.pbr_constants.elapsed_time = elapsed_time;
+
+        pipeline.properties.pbr_constants.camera_position[0] = camera_world->world._41;
+        pipeline.properties.pbr_constants.camera_position[1] = camera_world->world._42;
+        pipeline.properties.pbr_constants.camera_position[2] = camera_world->world._43;
+
+        _command_list->SetGraphicsRoot32BitConstants(2, sizeof(RR::GFX::PBRConstants) / 4, &pipeline.properties.pbr_constants, 0);
         break;
       }          
     }
@@ -1202,10 +1214,6 @@ void RR::Renderer::UpdatePipeline() {
     LOG_ERROR("RR", "Couldn't close command list");
     _running = false;
   }
-}
-
-void RR::Renderer::ShowEditor() {
-  ImGui::ShowDemoWindow();
 }
 
 void RR::Renderer::Render() {

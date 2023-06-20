@@ -106,8 +106,8 @@ void RR::RendererComponent::SetMVP(const MVPStruct& mvp) {
   _mvp_constant_buffers->Unmap(0, nullptr);
 }
 
-ID3D12DescriptorHeap* RR::RendererComponent::SRVDescriptorHeap(uint32_t geometry) {
-  return _srv_descriptor_heaps[geometry];
+ID3D12DescriptorHeap* RR::RendererComponent::SRVDescriptorHeap(uint32_t index) {
+  return _srv_descriptor_heaps[index];
 }
 
 void RR::RendererComponent::Update(ID3D12Device* device,
@@ -131,7 +131,7 @@ void RR::RendererComponent::Update(ID3D12Device* device,
       unsigned int descriptor_size = device->GetDescriptorHandleIncrementSize(
           D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-      D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle(_srv_descriptor_heaps[geometry]->GetCPUDescriptorHandleForHeapStart());
+      D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle =_srv_descriptor_heaps[geometry]->GetCPUDescriptorHandleForHeapStart();
 
       if (settings[geometry].pbr_settings.base_color_texture) {
         textures[textureSettings[geometry].pbr_textures.base_color].CreateResourceView( device, descriptor_handle);

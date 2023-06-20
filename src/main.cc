@@ -12,11 +12,13 @@
 
 struct UserData {
   RR::Renderer* renderer;
+  std::shared_ptr<RR::Entity> parent;
 };
 
 static void update(void* user_data) { 
   UserData* data = (UserData*) user_data;
 
+  // UPDATE CAMERA
   std::shared_ptr<RR::LocalTransform> transform =
       std::static_pointer_cast<RR::LocalTransform>(
           data->renderer->MainCamera()->GetComponent(
@@ -56,6 +58,11 @@ static void update(void* user_data) {
                              -0.05f * data->renderer->IsKeyDown('A')));
 
   DirectX::XMStoreFloat3(&transform->position, traslation);
+
+  // UPDATE SCENE
+  transform = std::static_pointer_cast<RR::LocalTransform>(
+      data->parent->GetComponent(RR::kComponentType_LocalTransform));
+  transform->rotation.y += data->renderer->delta_time * 0.05f;  
 }
 
 int main(int argc, char** argv) {
@@ -79,22 +86,27 @@ int main(int argc, char** argv) {
   camera->farZ = 500.0f;
   camera->nearZ = 0.001f;
 
-  transform->position = {0.0f, 0.5f, -10.0f};
-  transform->rotation = {0.0f, 0.0f, 0.0f};
+  transform->position = {4.996f, 2.5f, 0.0f};
+  transform->rotation = {15.0f, -90.0f, 0.0f};
 
   std::shared_ptr<std::vector<RR::MeshData>> meshes =
-    renderer.LoadFBXScene("../../resources/BistroExterior.fbx");
+    renderer.LoadFBXScene("../../resources/Helmets.fbx");
+
+  data.parent = renderer.RegisterEntity(
+      RR::ComponentTypes::kComponentType_LocalTransform |
+      RR::ComponentTypes::kComponentType_WorldTransform);
 
   for (int i = 0; i < meshes.get()->size(); i++) {
     RR::MeshData* mesh = &meshes.get()->at(i);
 
     std::shared_ptr<RR::Entity> ent = renderer.RegisterEntity(
         RR::ComponentTypes::kComponentType_Renderer |
-        RR::ComponentTypes::kComponentType_WorldTransform);
+        RR::ComponentTypes::kComponentType_WorldTransform | 
+        RR::ComponentTypes::kComponentType_LocalTransform);
 
-    std::shared_ptr<RR::WorldTransform> transform =
-        std::static_pointer_cast<RR::WorldTransform>(ent.get()->GetComponent(
-            RR::ComponentTypes::kComponentType_WorldTransform));
+    std::shared_ptr<RR::LocalTransform> transform =
+        std::static_pointer_cast<RR::LocalTransform>(ent.get()->GetComponent(
+            RR::ComponentTypes::kComponentType_LocalTransform));
 
     std::shared_ptr<RR::RendererComponent> renderer_c =
         std::static_pointer_cast<RR::RendererComponent>(ent.get()->GetComponent(
@@ -102,7 +114,11 @@ int main(int argc, char** argv) {
 
     renderer_c->Init(&renderer, RR::PipelineTypes::kPipelineType_PBR, mesh->geometries.size());
 
-    transform->world = mesh->world;
+    transform->position = mesh->position;
+    transform->rotation = mesh->rotation;
+    transform->scale = mesh->scale;
+
+    transform->SetParent(data.parent);
 
     for (int j = 0; j < mesh->geometries.size(); j++) {  
       renderer_c->geometries[j] = mesh->geometries[j];
